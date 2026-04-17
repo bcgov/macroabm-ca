@@ -270,24 +270,31 @@ class ConstantGrowthGovernmentConsumptionSetter(GovernmentConsumptionSetter):
             np.ndarray: Target consumption by industry
         """
         if historic_total_consumption is None:
-            return np.maximum(
-                0.0,
-                (1 + expected_inflation) * (1 + self.default_growth) * previous_desired_government_consumption,
-            )
-        if self.default_growth is None:
-            self.default_growth = np.mean(
+            if self.default_growth is None:
+                raise ValueError(
+                    "ConstantGrowthGovernmentConsumptionSetter requires either "
+                    "historic_total_consumption or a configured default_growth."
+                )
+            growth_factor = 1 + self.default_growth
+        elif self.default_growth is None:
+            estimated_log_growth = np.mean(
                 np.log(
                     historic_total_consumption[1 : -current_time - 1]
                     / historic_total_consumption[0 : -current_time - 2]
                 )
             )
+            self.default_growth = np.exp(estimated_log_growth) - 1
+            growth_factor = 1 + self.default_growth
+        else:
+            growth_factor = 1 + self.default_growth
+
 
         return np.maximum(
             0.0,
             (1 + expected_inflation)
             * current_good_prices
             / initial_good_prices
-            * (1 + self.default_growth)
+            * growth_factor
             * previous_desired_government_consumption,
         )
 
