@@ -1,8 +1,8 @@
-"""Reader and container for exogenous energy price data."""
+"""Reader and container for exogenous firm price data."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -11,126 +11,90 @@ import pandas as pd
 
 
 @dataclass
-class ExoPrices:
-    """Container for exogenous energy price paths.
+class FirmExoPrices:
+    """Container for exogenous firm price paths.
 
-    Holds fossil fuel and electricity price trajectories from an external
-    model (e.g. CIMS), together with the industry-name-to-CSV-row mappings
-    that connect each model industry to the correct row in each price file.
-
-    The mapping keys are industry names (strings) so the price setter can
-    look up array indices at runtime — no hardcoded positional indices.
+    Holds a DataFrame of price trajectories keyed by industry name.
+    Each column is an industry; the index is years. Prices are normalised
+    to initial_year at runtime by FirmExogenousPriceSetter.
 
     Attributes:
-        fossil_prices: DataFrame of fossil fuel price projections.
-            Row 0 contains the years; subsequent rows contain $/GJ values.
-        electricity_prices: DataFrame of electricity price projections,
-            same layout as fossil_prices.
-        fossil_sector_rows: Maps each industry name to its row index in
-            fossil_prices (e.g. {"B05a Coal mining": 22}).
-        electricity_sector_rows: Maps each industry name to its row index
-            in electricity_prices (e.g. {"D01a Electricity": 4}).
-        petroleum_crude_sector: Industry name for petroleum crude, whose
-            price series comes from petroleum_crude_data rather than the
-            fossil CSV (because CIMS does not export it directly).
-        petroleum_crude_data: Raw price series for petroleum crude as
-            {"years": [2014, 2016, ...], "prices": [61, 53, ...]}.
-        initial_year: Base year for price normalisation. Set to the
-            simulation's initial_year before passing to Firms.
-        initial_model_prices: Per-industry base prices from the model
-            (average_initial_price array). Set from Country before Firms
-            is constructed so the price setter can normalise correctly.
+        prices: DataFrame with years as index and industry names as columns.
+        initial_year: Base year for price normalisation.
+        initial_model_prices: Per-firm base prices injected from the model
+            before the price setter is used.
     """
 
-    fossil_prices: Optional[pd.DataFrame] = None
-    electricity_prices: Optional[pd.DataFrame] = None
-    fossil_sector_rows: dict[str, int] = field(default_factory=dict)
-    electricity_sector_rows: dict[str, int] = field(default_factory=dict)
-    petroleum_crude_sector: Optional[str] = None
-    petroleum_crude_data: Optional[dict] = None
+    prices: Optional[pd.DataFrame] = None
     initial_year: int = 2014
     initial_model_prices: Optional[np.ndarray] = None
 
     @property
     def values_dictionary(self) -> dict:
-        """Dict-based access to the price DataFrames."""
-        return {
-            "fossil_prices": self.fossil_prices,
-            "electricity_prices": self.electricity_prices,
-        }
+        """Dict-based access to the price DataFrame."""
+        return {"prices": self.prices}
 
     @classmethod
     def from_reader(
         cls,
-        reader: ExoPricesReader,
-        fossil_sector_rows: Optional[dict[str, int]] = None,
-        electricity_sector_rows: Optional[dict[str, int]] = None,
-        petroleum_crude_sector: Optional[str] = None,
-        petroleum_crude_data: Optional[dict] = None,
+        reader: FirmExoPricesReader,
         initial_year: int = 2014,
-    ) -> ExoPrices:
-        """Build an ExoPrices container from a reader and industry mappings.
+    ) -> FirmExoPrices:
+        """Build a FirmExoPrices container from a reader.
 
         Args:
-            reader: Loaded ExoPricesReader.
-            fossil_sector_rows: Maps industry name → row index in fossil CSV.
-            electricity_sector_rows: Maps industry name → row index in
-                electricity CSV.
-            petroleum_crude_sector: Industry name for petroleum crude.
-            petroleum_crude_data: {"years": [...], "prices": [...]} for
-                petroleum crude (not available in fossil CSV).
+            reader: Loaded FirmExoPricesReader.
             initial_year: Base year for price normalisation.
 
         Returns:
-            ExoPrices container ready to be passed to Firms.
+            FirmExoPrices container ready to be passed to Firms.
         """
-        return cls(
-            fossil_prices=reader.fossil_prices,
-            electricity_prices=reader.electricity_prices,
-            fossil_sector_rows=fossil_sector_rows or {},
-            electricity_sector_rows=electricity_sector_rows or {},
-            petroleum_crude_sector=petroleum_crude_sector,
-            petroleum_crude_data=petroleum_crude_data,
-            initial_year=initial_year,
-        )
+        return cls(prices=reader.prices, initial_year=initial_year)
 
 
 @dataclass
-class ExoPricesReader:
-    """Reader for exogenous fossil fuel and electricity price CSVs.
+class FirmExoPricesReader:
+    """Reader for a single exogenous firm prices CSV.
+
+    The CSV must have years as the row index and industry codes as column
+    headers. Column names must match the ISIC Rev. 4 codes used by the model —
+    either aggregated (e.g. "D", "B", "C19") or detailed (e.g. "B05", "C19",
+    "D") depending on the industries list the model is configured with.
+    Values are prices in any consistent unit; the price setter normalises them
+    to the initial year automatically.
+
+    Example CSV layout (aggregated industries, initial_year=2014):
+
+        year,D,B
+        2013,100.0,80.0
+        2014,102.5,85.0
+        2015,106.0,91.0
+        2030,130.0,110.0
+
+    Start one year before initial_year so that Q1 of the first simulation
+    year (which maps to initial_year − 0.25) stays within the interpolation
+    range.
 
     Attributes:
-        fossil_prices: DataFrame with fossil fuel price projections.
-        electricity_prices: DataFrame with electricity price projections.
+        prices: DataFrame loaded from the CSV (None if file absent).
     """
 
-    fossil_prices: Optional[pd.DataFrame] = None
-    electricity_prices: Optional[pd.DataFrame] = None
+    prices: Optional[pd.DataFrame] = None
 
     @classmethod
     def read_from_raw_data(
         cls,
-        fossil_prices_path: Path | str,
-        electricity_prices_path: Optional[Path | str] = None,
-    ) -> ExoPricesReader:
-        """Load exogenous price CSVs from disk.
+        prices_path: Path | str,
+    ) -> FirmExoPricesReader:
+        """Load the firm prices CSV from disk.
 
         Args:
-            fossil_prices_path: Path to fossil fuel prices CSV.
-            electricity_prices_path: Path to electricity prices CSV.
+            prices_path: Path to the CSV file (index_col=0 assumed).
 
         Returns:
-            ExoPricesReader with loaded DataFrames (None if file absent).
+            FirmExoPricesReader with loaded DataFrame (None if file absent).
         """
-        if isinstance(fossil_prices_path, str):
-            fossil_prices_path = Path(fossil_prices_path)
-        fossil = pd.read_csv(fossil_prices_path) if fossil_prices_path.exists() else None
-
-        elec = None
-        if electricity_prices_path is not None:
-            if isinstance(electricity_prices_path, str):
-                electricity_prices_path = Path(electricity_prices_path)
-            if electricity_prices_path.exists():
-                elec = pd.read_csv(electricity_prices_path)
-
-        return cls(fossil_prices=fossil, electricity_prices=elec)
+        if isinstance(prices_path, str):
+            prices_path = Path(prices_path)
+        prices = pd.read_csv(prices_path, index_col=0) if prices_path.exists() else None
+        return cls(prices=prices)

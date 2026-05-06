@@ -110,7 +110,7 @@ from macro_data.processing.synthetic_population.synthetic_population import (
 from macro_data.readers import AGGREGATED_INDUSTRIES, ALL_INDUSTRIES, DataReaders
 from macro_data.readers.emission_fraction.emission_fraction_reader import EmissionFractions
 from macro_data.readers.emissions.emissions_reader import EmissionsData
-from macro_data.readers.exo_prices.exo_prices_reader import ExoPrices
+from macro_data.readers.exo_prices.exo_prices_reader import FirmExoPrices
 from macro_data.readers.exogenous_data import ExogenousCountryData
 
 
@@ -172,7 +172,7 @@ class SyntheticCountry:
     consumption_weights_by_income: pd.DataFrame
     emission_factors: EmissionsData
     emission_fractions: Optional[EmissionFractions] = None
-    exo_prices: Optional[ExoPrices] = None
+    firm_exo_prices: Optional[FirmExoPrices] = None
 
     @classmethod
     def eu_synthetic_country(
@@ -355,8 +355,8 @@ class SyntheticCountry:
                 if readers.emission_fractions is not None
                 else None
             ),
-            exo_prices=(
-                ExoPrices.from_reader(readers.exo_prices)
+            firm_exo_prices=(
+                FirmExoPrices.from_reader(readers.exo_prices)
                 if readers.exo_prices is not None
                 else None
             ),
@@ -555,8 +555,8 @@ class SyntheticCountry:
                 if readers.emission_fractions is not None
                 else None
             ),
-            exo_prices=(
-                ExoPrices.from_reader(readers.exo_prices)
+            firm_exo_prices=(
+                FirmExoPrices.from_reader(readers.exo_prices)
                 if readers.exo_prices is not None
                 else None
             ),

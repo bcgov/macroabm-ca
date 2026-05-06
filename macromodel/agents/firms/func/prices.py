@@ -210,49 +210,39 @@ class DefaultPriceSetter(PriceSetter):
         )
 
 
-class ExoEnergyExogenousPriceSetter(DefaultPriceSetter):
-    """Price setter that overrides energy sector prices with exogenous CIMS trajectories.
+class FirmExogenousPriceSetter(DefaultPriceSetter):
+    """Price setter that overrides selected industries with exogenous price paths.
 
-    All non-energy industries follow the default endogenous price-setting rule.
-    For energy industries, prices are replaced by a normalised CIMS price path:
+    All industries not listed in the price file follow the default endogenous
+    price-setting rule. For listed industries, prices are replaced by a
+    normalised exogenous price path:
 
-        price[t] = initial_model_price * (CIMS_price[t] / CIMS_price[initial_year])
+        price[t] = initial_model_price * (file_price[t] / file_price[initial_year])
 
-    Industry positions are resolved at runtime from their names, so the class
-    works regardless of the number of industries or their ordering.
+    The input CSV must have years as the index and industry names as columns.
+    Industry positions are resolved at runtime from their names.
 
     Attributes:
-        exo_prices: ExoPrices container (injected after instantiation).
+        firm_exo_prices: FirmExoPrices container (injected after instantiation).
         industries: Ordered list of industry names matching the firms array
             (injected after instantiation).
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.exo_prices = None
+        self.firm_exo_prices = None
         self.industries: list[str] = []
 
     def _indices_for(self, industry_name: str) -> list[int]:
         """Return all firm array indices whose industry matches industry_name."""
         return [i for i, name in enumerate(self.industries) if name == industry_name]
 
-    def _normalised_price_path(self, cims_row: int, df, current_time: int) -> float:
-        """Interpolate a CIMS price path and normalise to the initial year.
-
-        The CSV layout expected: row 0 holds the years, the requested row
-        holds the $/GJ values.  Both span columns 12–22 (inclusive).
-
-        Args:
-            cims_row: Row index of the energy product in the CSV.
-            df: DataFrame loaded from the CIMS CSV.
-            current_time: Current simulation quarter index (0 = Q1 initial_year).
-
-        Returns:
-            Ratio of current price to initial-year price (1.0 at t=0).
-        """
-        initial_year = self.exo_prices.initial_year
-        years = np.array(df.iloc[0, 12:23]).astype(int)
-        prices = np.array(df.iloc[cims_row, 12:23], dtype=float)
+    def _normalised_price(self, industry_name: str, current_time: int) -> float:
+        """Interpolate the exogenous price for an industry and normalise to the initial year."""
+        initial_year = self.firm_exo_prices.initial_year
+        series = self.firm_exo_prices.prices[industry_name]
+        years = series.index.astype(float).values
+        prices = series.values.astype(float)
         fn = interp1d(years, prices)
         yr = initial_year + current_time // 4 + current_time % 4 / 4 - 0.25
         return float(fn(yr)) / float(fn(initial_year))
@@ -295,40 +285,21 @@ class ExoEnergyExogenousPriceSetter(DefaultPriceSetter):
             max_inflation=max_inflation,
         )
 
-        if self.exo_prices is None or not self.industries:
+        if self.firm_exo_prices is None or len(self.industries) == 0:
             return price
 
         base_prices = (
-            self.exo_prices.initial_model_prices
-            if self.exo_prices.initial_model_prices is not None
+            self.firm_exo_prices.initial_model_prices
+            if self.firm_exo_prices.initial_model_prices is not None
             else prev_average_good_prices
         )
-        fossil_df = self.exo_prices.fossil_prices
-        elec_df = self.exo_prices.electricity_prices
 
-        # Fossil fuel sectors
-        if fossil_df is not None:
-            for industry_name, cims_row in self.exo_prices.fossil_sector_rows.items():
-                ratio = self._normalised_price_path(cims_row, fossil_df, current_time)
-                for idx in self._indices_for(industry_name):
-                    price[idx] = base_prices[idx] * ratio
-
-        # Petroleum crude (special series not in the fossil fuel CSV)
-        if self.exo_prices.petroleum_crude_sector and self.exo_prices.petroleum_crude_data:
-            initial_year = self.exo_prices.initial_year
-            data = self.exo_prices.petroleum_crude_data
-            fn = interp1d(data["years"], data["prices"])
-            yr = initial_year + current_time // 4 + current_time % 4 / 4 - 0.25
-            ratio = float(fn(yr)) / float(fn(initial_year))
-            for idx in self._indices_for(self.exo_prices.petroleum_crude_sector):
+        for industry_name in self.firm_exo_prices.prices.columns:
+            if industry_name not in self.industries:
+                continue
+            ratio = self._normalised_price(industry_name, current_time)
+            for idx in self._indices_for(industry_name):
                 price[idx] = base_prices[idx] * ratio
-
-        # Electricity sectors
-        if elec_df is not None:
-            for industry_name, cims_row in self.exo_prices.electricity_sector_rows.items():
-                ratio = self._normalised_price_path(cims_row, elec_df, current_time)
-                for idx in self._indices_for(industry_name):
-                    price[idx] = base_prices[idx] * ratio
 
         return price
 
