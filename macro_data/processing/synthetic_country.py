@@ -109,7 +109,7 @@ from macro_data.processing.synthetic_population.synthetic_population import (
 )
 from macro_data.readers import AGGREGATED_INDUSTRIES, ALL_INDUSTRIES, DataReaders
 from macro_data.readers.emission_fraction.emission_fraction_reader import EmissionFractions
-from macro_data.readers.emissions.emissions_reader import EmissionsData
+from macro_data.readers.emissions.emissions_reader import CH4EmissionsDataCAN, EmissionsData
 from macro_data.readers.exogenous_data import ExogenousCountryData
 
 
@@ -171,6 +171,7 @@ class SyntheticCountry:
     consumption_weights_by_income: pd.DataFrame
     emission_factors: EmissionsData
     emission_fractions: Optional[EmissionFractions] = None
+    emission_factors_ch4: Optional[CH4EmissionsDataCAN] = None
     historical_emissions_df: Optional[pd.DataFrame] = None
 
     @classmethod
@@ -331,6 +332,22 @@ class SyntheticCountry:
         else:
             emission_fractions = None
 
+        if readers.ch4_emissions is not None and emission_factors is not None:
+            production_by_industry = (
+                firms.firm_data.groupby("Industry")["Production"]
+                .sum()
+                .reindex(range(len(industries)), fill_value=0.0)
+                .values
+            )
+            emission_factors_ch4 = CH4EmissionsDataCAN.from_reader(
+                reader=readers.ch4_emissions,
+                industries=industries,
+                production_by_industry=production_by_industry,
+                year=year,
+            )
+        else:
+            emission_factors_ch4 = None
+
         return cls(
             population=population,
             firms=firms,
@@ -355,6 +372,7 @@ class SyntheticCountry:
             synthetic_goods_market=synthetic_goods_market,
             emission_factors=emission_factors,
             emission_fractions=emission_fractions,
+            emission_factors_ch4=emission_factors_ch4,
         )
 
     @classmethod
