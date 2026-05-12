@@ -84,7 +84,8 @@ class InflationRoWPriceSetter(RoWPriceSetter):
             1e-3,
             (1.0 + adjustment_speed * (aggregate_country_price_index - 1.0)) * initial_price,
         )
-    
+
+
 class FirmExogenousROWPriceSetter(InflationRoWPriceSetter):
     """ROW price setter that overrides selected industries with exogenous price paths.
 
