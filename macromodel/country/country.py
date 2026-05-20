@@ -298,6 +298,10 @@ class Country:
         )
 
         average_initial_price = synthetic_country.industry_data["industry_vectors"]["Average Initial Price"].values
+        firm_exo_prices = synthetic_country.firm_exo_prices
+        if firm_exo_prices is not None:
+            firm_exo_prices.initial_year = initial_year
+            firm_exo_prices.initial_model_prices = average_initial_price
         firms = Firms.from_pickled_agent(
             synthetic_firms=synthetic_country.firms,
             configuration=country_configuration.firms,
@@ -308,6 +312,7 @@ class Country:
             industries=industries,
             add_emissions=add_emissions,
             emission_fractions=emission_fractions,
+            firm_exo_prices=firm_exo_prices,
         )
 
         taxes_less_subsidies = synthetic_country.industry_data["industry_vectors"]["Taxes Less Subsidies Rates"].values
