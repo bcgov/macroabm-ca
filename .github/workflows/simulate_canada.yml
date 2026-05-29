@@ -48,6 +48,12 @@ jobs:
       - name: Run ${{ matrix.country }} simulation
         run: uv run python test_run/run_simulation.py ${{ matrix.country }}
 
+      - name: Inspect income for ${{ matrix.country }}
+        run: uv run python test_run/inspect_income.py ${{ matrix.country }}
+
+      - name: Generate summary and visualizations for ${{ matrix.country }}
+        run: uv run python test_run/summary_and_viz.py ${{ matrix.country }}
+
       - name: List output
         if: always()
         run: ls -lah output/
