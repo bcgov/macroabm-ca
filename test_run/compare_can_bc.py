@@ -70,7 +70,7 @@ def run_simulation(country: str, args) -> tuple[Simulation, list[float]]:
     needs_proxy = parent not in eu28
     proxy = (args.proxy or "FRA").upper() if needs_proxy else None
     pdict = {parent: proxy} if proxy else {}
-    use_disagg = parent == "CAN" and not is_region and proxy in eu28
+    use_disagg = False  # AGGREGATED (18 sectors) for fair CAN vs CAN_BC comparison
 
     msg = "PIT ON" if upper == "CAN_BC" else "flat"
     print(f"  [{upper}] scale={args.scale:,}  t_max={args.t_max}  tax={msg}")
@@ -220,6 +220,9 @@ def compare_in_process(sim_can, sim_bc, tax_can, tax_bc, args, out_dir):
     cg_can = sim_can.countries[can_key].central_government
     cg_bc = sim_bc.countries[bc_key].central_government
 
+    can_sh = sim_can.countries[can_key].shallow_output()
+    bc_sh = sim_bc.countries[bc_key].shallow_output()
+
     # ── Effective tax rate + revenue ────────────────────────────────
     steps = np.arange(len(tax_can))
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -239,8 +242,8 @@ def compare_in_process(sim_can, sim_bc, tax_can, tax_bc, args, out_dir):
     ax.set_title("Income Tax Revenue"); ax.legend(); ax.grid(True, alpha=0.3)
 
     ax = axes[2]
-    diff = (np.array(tax_bc) - np.array(tax_can))*100
-    ax.bar(steps, diff, color=["#2ca02c" if d>=0 else "#d62728" for d in diff], alpha=0.7)
+    diff_rate = (np.array(tax_bc) - np.array(tax_can))*100
+    ax.bar(steps, diff_rate, color=["#2ca02c" if d>=0 else "#d62728" for d in diff_rate], alpha=0.7)
     ax.axhline(0, color="black", linewidth=0.8)
     ax.set_xlabel("Timestep"); ax.set_ylabel("Δ (pp)")
     ax.set_title("CAN_BC − CAN Rate Diff"); ax.grid(True, alpha=0.3, axis="y")
@@ -249,26 +252,127 @@ def compare_in_process(sim_can, sim_bc, tax_can, tax_bc, args, out_dir):
     plt.close(fig)
     print(f"  Saved: compare_tax_rates.png")
 
-    # ── Macro comparison ────────────────────────────────────────────
-    can_sh = sim_can.countries[can_key].shallow_output()
-    bc_sh = sim_bc.countries[bc_key].shallow_output()
+    # ── Themed macro timeseries (4 grids) ──────────────────────────
+    # All columns from shallow_output() that exist in both DataFrames.
+    _all_cols = [c for c in can_sh.columns if c in bc_sh.columns]
 
-    fig2, axes2 = plt.subplots(2, 3, figsize=(18, 10))
-    for (col, label), ax in zip([
-        ("Production","Production"), ("Wages","Wages"),
-        ("Household Consumption","Consumption"),
-        ("Unemployment Rate","Unemployment Rate"),
-        ("CPI","CPI Inflation"), ("Gross Output","Gross Output"),
-    ], axes2.flat):
-        cv = can_sh[col].values[:t_max]; bv = bc_sh[col].values[:t_max]
+    # Helper: draw one themed grid, return list of (col, label) actually plotted.
+    def _plot_themed_grid(metrics_map: list[tuple[str, str]],
+                           filename: str, ncols: int = 3, figsize_scale: float = 1.0):
+        found_m = [(col, label) for col, label in metrics_map if col in _all_cols]
+        if not found_m:
+            print(f"  (no matching metrics for {filename})")
+            return []
+        nr = (len(found_m) + ncols - 1) // ncols
+        fig, axes = plt.subplots(nr, ncols, figsize=(6 * ncols * figsize_scale,
+                                                       3.5 * nr * figsize_scale))
+        axes = axes.flatten() if hasattr(axes, "flatten") else [axes]
+        for j, (col, label) in enumerate(found_m):
+            ax = axes[j]
+            cv = can_sh[col].values[:t_max]
+            bv = bc_sh[col].values[:t_max]
+            n = min(len(cv), len(bv))
+            ax.plot(range(n), cv[:n], "o-", label="CAN flat", linewidth=2, markersize=4)
+            ax.plot(range(n), bv[:n], "s-", label="CAN_BC prog", linewidth=2, markersize=4)
+            ax.set_title(label); ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        for j in range(len(found_m), len(axes)):
+            axes[j].set_visible(False)
+        fig.tight_layout()
+        fig.savefig(out_dir / filename, dpi=150)
+        plt.close(fig)
+        print(f"  Saved: {filename} ({len(found_m)} metrics)")
+        return found_m
+
+    # Grid 1 — Consumption & Income
+    consumption_metrics = [
+        ("Household Consumption",   "Household Consumption"),
+        ("Government Consumption",  "Government Consumption"),
+        ("Wages",                   "Wages"),
+        ("Profits",                 "Profits"),
+        ("Sales",                   "Sales"),
+        ("Operating Surplus",       "Operating Surplus"),
+    ]
+    cons_found = _plot_themed_grid(consumption_metrics,
+                                   "compare_consumption_income.png")
+
+    # Grid 2 — Investment & Credit
+    # Omitted: Consumption Loan Debt, Mortgage Debt, Central Bank Policy Rate —
+    # these are identical between CAN and CAN_BC because the PIT rate does not
+    # influence credit-market clearing or monetary-policy decisions.
+    investment_metrics = [
+        ("Capital Bought",     "Capital Bought"),
+        ("Inventory Changes",  "Inventory Changes"),
+        ("Bought Input Costs", "Bought Input Costs"),
+    ]
+    inv_found = _plot_themed_grid(investment_metrics,
+                                  "compare_investment_credit.png")
+
+    # Grid 3 — Government & Prices
+    govt_metrics = [
+        ("Taxes Paid on Production","Taxes on Production"),
+        ("Taxes on Products",       "Taxes on Products"),
+        ("Unemployment Rate",       "Unemployment Rate"),
+        ("CPI",                     "CPI Inflation"),
+        ("PPI",                     "PPI Inflation"),
+        ("CFPI",                    "CFPI Inflation"),
+    ]
+    govt_found = _plot_themed_grid(govt_metrics,
+                                   "compare_government_prices.png")
+
+    # Grid 4 — Trade & Output
+    trade_metrics = [
+        ("Imports",       "Imports"),
+        ("Exports",       "Exports"),
+        ("Production",    "Production"),
+        ("Gross Output",  "Gross Output"),
+        ("Used Input Costs","Used Input Costs"),
+    ]
+    trade_found = _plot_themed_grid(trade_metrics,
+                                    "compare_trade_output.png")
+
+    # ── Omitted (PIT-independent) metrics ───────────────────────────
+    _pit_independent = [
+        "Consumption Expansion Loan Debt",
+        "Mortgage Debt",
+        "Central Bank Policy Rate",
+    ]
+    _omitted = [c for c in _pit_independent if c in _all_cols]
+    if _omitted:
+        print(f"  Note: {', '.join(_omitted)} omitted from plots — identical between "
+              f"CAN and CAN_BC because the PIT rate does not affect credit-market "
+              f"clearing or monetary-policy decisions.")
+
+    # ── CSV export (all shallow_output columns + tax extras) ────────
+    import pandas as pd
+    csv_rows = []
+    for col in _all_cols:
+        cv = can_sh[col].values[:t_max]
+        bv = bc_sh[col].values[:t_max]
         n = min(len(cv), len(bv))
-        ax.plot(range(n), cv[:n], "o-", label="CAN flat", linewidth=2)
-        ax.plot(range(n), bv[:n], "s-", label="CAN_BC prog", linewidth=2)
-        ax.set_title(label); ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
-    fig2.tight_layout()
-    fig2.savefig(out_dir / "compare_macro.png", dpi=150)
-    plt.close(fig2)
-    print(f"  Saved: compare_macro.png")
+        for t in range(n):
+            csv_rows.append({
+                "metric": col, "timestep": t,
+                "CAN_flat": cv[t], "CAN_BC_prog": bv[t],
+                "delta": bv[t] - cv[t],
+            })
+    for t in range(min(len(tax_can), len(tax_bc))):
+        csv_rows.append({
+            "metric": "effective_income_tax_rate",
+            "timestep": t,
+            "CAN_flat": tax_can[t], "CAN_BC_prog": tax_bc[t],
+            "delta": tax_bc[t] - tax_can[t],
+        })
+    for t in range(min(len(inc_c), len(inc_b))):
+        csv_rows.append({
+            "metric": "income_tax_revenue",
+            "timestep": t,
+            "CAN_flat": inc_c[t], "CAN_BC_prog": inc_b[t],
+            "delta": inc_b[t] - inc_c[t],
+        })
+    csv_df = pd.DataFrame(csv_rows)
+    csv_path = out_dir / "compare_can_bc_timeseries.csv"
+    csv_df.to_csv(csv_path, index=False)
+    print(f"  Saved: {csv_path.name} ({len(csv_df)} rows)")
 
     # ── Summary table ───────────────────────────────────────────────
     print(f"\n{'='*60}")
@@ -297,7 +401,7 @@ def compare_in_process(sim_can, sim_bc, tax_can, tax_bc, args, out_dir):
         d = (tax_bc[i] - tax_can[i]) * 100
         print(f"  {i:<6} {tax_can[i]*100:>10.2f}% {tax_bc[i]*100:>14.2f}% {d:>+9.2f}pp")
 
-    print(f"\n  Plots saved to: {out_dir}")
+    print(f"\n  Plots + CSV saved to: {out_dir}")
 
 
 # ═════════════════════════════════════════════════════════════════════
