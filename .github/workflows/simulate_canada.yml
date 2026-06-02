@@ -72,9 +72,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "country=${{ inputs.country }}" >> $GITHUB_OUTPUT
-            echo "t_max=${{ inputs.t_max }}" >> $GITHUB_OUTPUT
-            echo "scale=${{ inputs.scale }}" >> $GITHUB_OUTPUT
+            echo "country=${{ github.event.inputs.country }}" >> $GITHUB_OUTPUT
+            echo "t_max=${{ github.event.inputs.t_max }}" >> $GITHUB_OUTPUT
+            echo "scale=${{ github.event.inputs.scale }}" >> $GITHUB_OUTPUT
           else
             echo "country=${{ matrix.country }}" >> $GITHUB_OUTPUT
             echo "t_max=20" >> $GITHUB_OUTPUT
