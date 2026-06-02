@@ -31,16 +31,6 @@ from macromodel.util.function_mapping import functions_from_model, update_functi
 from macro_data.readers.taxation.personal_income_tax.pit_schedule import compute_progressive_tax
 
 
-def _is_canada_bc(country_name: str) -> bool:
-    """Return True if *country_name* represents Canada–British Columbia.
-
-    Handles both Country codes (``"CAN"``) paired with a Region suffix
-    (``"CAN_BC"``, ``"CAN-BC"``) and longer descriptive names.
-    """
-    upper = country_name.upper()
-    return "CAN" in upper and "BC" in upper
-
-
 class CentralGovernment(Agent):
     """Central Government agent responsible for fiscal policy and social benefits.
 
@@ -141,9 +131,9 @@ class CentralGovernment(Agent):
             "other_benefits_model": synthetic_central_government.other_benefits_model,
         }
 
-        # Progressive PIT schedule (optional — None means use flat Income Tax,
-        # and only activated for Canada–British Columbia)
-        if configuration.pit_brackets is not None and _is_canada_bc(country_name):
+        # Progressive PIT schedule (optional — None means use flat Income Tax).
+        # Activated for any country/region whose config sets pit_brackets.
+        if configuration.pit_brackets is not None:
             brackets = np.array(configuration.pit_brackets, dtype=float)
             states["pit_thresholds"] = brackets[:, 0]
             states["pit_rates"] = brackets[:, 1]
