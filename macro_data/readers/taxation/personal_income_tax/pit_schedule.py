@@ -235,10 +235,34 @@ def fetch_bc_cpi_inflation(
             "Install it with: pip install stats-can"
         ) from exc
 
-    logger.info("Fetching StatCan table %s ...", _STATCAN_CPI_TABLE)
-    raw = zip_table_to_dataframe(_STATCAN_CPI_TABLE)
+    import tempfile
+    import zipfile
 
-    # The returned DataFrame uses StatCan dimension names as columns.
+    # Download the zip to a temp directory so we can read the CSV
+    # with proper encoding (stats-can v3 may mishandle BOM-quoted
+    # column headers, producing NaT for REF_DATE).
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        logger.info("Fetching StatCan table %s ...", _STATCAN_CPI_TABLE)
+        zip_table_to_dataframe(_STATCAN_CPI_TABLE, path=tmp_path)
+
+        # Find the downloaded zip and read the CSV with utf-8-sig
+        zips = list(tmp_path.glob("*.zip"))
+        if not zips:
+            raise RuntimeError(
+                "StatCan download did not produce a zip file in %s" % tmpdir
+            )
+        zip_path = zips[0]
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            csv_names = [n for n in zf.namelist() if n.endswith(".csv") and "MetaData" not in n]
+            if not csv_names:
+                raise RuntimeError("No data CSV found in zip: %s" % zf.namelist())
+            raw = pd.read_csv(zf.open(csv_names[0]), encoding="utf-8-sig")
+
+    # Strip any remaining quotes from column names (StatsCan CSVs
+    # sometimes quote headers like \"REF_DATE\").
+    raw.columns = raw.columns.str.strip('"')
+
     # We need: GEO = "British Columbia", Products = "All-items".
     geo_col = _find_column(raw, ["geo", "geography", "geographic", "geog"])
     product_col = _find_column(raw, [
@@ -262,18 +286,31 @@ def fetch_bc_cpi_inflation(
             "Check that the column names match: %s" % (_STATCAN_CPI_TABLE, list(raw.columns))
         )
 
-    bc_all[ref_col] = pd.to_datetime(bc_all[ref_col], errors="coerce")
-    bc_all = bc_all.dropna(subset=[ref_col])
-    bc_all["year"] = bc_all[ref_col].dt.year
     bc_all[value_col] = pd.to_numeric(bc_all[value_col], errors="coerce")
     bc_all = bc_all.dropna(subset=[value_col])
 
-    # Use December value for each year to compute YoY change.
-    annual = bc_all[bc_all[ref_col].dt.month == 12].sort_values("year")
-    if annual.empty:
-        # Fall back to annual mean if December is not available.
-        annual = bc_all.groupby("year")[value_col].mean().reset_index()
+    # --- Parse REF_DATE into year & optional month -----------------
+    # StatsCan CSVs may have REF_DATE as:
+    #   * plain years  (e.g. 1979)        → int / float columns
+    #   * YYYY-MM      (e.g. "2023-01")   → object columns
+    #   * YYYY-MM-DD   (e.g. "2023-01-01")
+    ref_series = bc_all[ref_col]
+    if pd.api.types.is_numeric_dtype(ref_series):
+        # Already years — use directly.
+        bc_all["year"] = ref_series.astype(int)
+        # Annual data: one row per year → no month filtering needed.
+        annual = bc_all.sort_values("year")
+    else:
+        ref_dt = pd.to_datetime(ref_series, errors="coerce")
+        bc_all["year"] = ref_dt.dt.year
+        # Try December-first; fall back to annual mean.
+        dec_rows = bc_all[ref_dt.dt.month == 12]
+        if len(dec_rows) > 0:
+            annual = dec_rows.sort_values("year")
+        else:
+            annual = bc_all.groupby("year")[value_col].mean().reset_index()
 
+    # Compute year-over-year inflation as pct_change of the CPI level.
     annual = annual.set_index("year")
     annual["inflation"] = annual[value_col].pct_change()
 
