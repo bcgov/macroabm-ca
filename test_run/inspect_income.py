@@ -61,7 +61,7 @@ if COUNTRY != HDF5_GROUP:
 
 
 # ── Load PIT schedule (if applicable) ───────────────────────────────
-pit_thresholds = pit_rates = None
+pit_thresholds = pit_rates = pit_lower = pit_quick = pit_basic_deduction = None
 pit_label = ""
 if pit_csv_arg:
     from macro_data.readers.taxation.personal_income_tax.pit_schedule import PITSchedule
@@ -73,7 +73,10 @@ if pit_csv_arg:
     pit_thresholds, pit_rates, pit_lower, pit_quick = schedule.get_brackets(
         tax_year=schedule.base_year
     )
+    pit_basic_deduction = schedule.basic_deduction
     pit_label = f" | PIT: {pit_csv_arg} ({schedule.base_year})"
+    if pit_basic_deduction is not None:
+        pit_label += f" | basic_deduction=${pit_basic_deduction:,.0f}"
     print(f"PIT schedule loaded: {len(pit_thresholds)} brackets from {pit_csv_arg}")
 
 
@@ -120,11 +123,20 @@ with h5py.File(H5_PATH, "r") as f:
 
         # Taxable base = employee income (same as in CentralGovernment.compute_taxes)
         pit_tax = compute_progressive_tax(ind_emp_income, pit_thresholds, pit_rates)
+
+        # Apply non-refundable basic personal amount credit when configured.
+        if pit_basic_deduction is not None and pit_basic_deduction > 0:
+            credit = pit_basic_deduction * float(pit_rates[0])
+            pit_tax = np.maximum(0.0, pit_tax - credit)
+
         total_tax = pit_tax.sum()
         total_taxable = ind_emp_income.sum()
         eff_rate = total_tax / total_taxable if total_taxable > 0 else 0.0
 
         print(f"\n===== PERSONAL INCOME TAX (initial state) =====")
+        if pit_basic_deduction is not None:
+            print(f"  Basic personal amount:   ${pit_basic_deduction:,.0f}  "
+                  f"(credit @ {pit_rates[0]:.1%} = ${pit_basic_deduction * pit_rates[0]:,.0f})")
         print(f"  Total employee income:  {total_taxable:,.6f}")
         print(f"  Total PIT revenue:      {total_tax:,.6f}")
         print(f"  Effective rate:         {eff_rate:.4%}")

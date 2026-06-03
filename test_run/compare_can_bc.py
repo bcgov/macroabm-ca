@@ -85,13 +85,18 @@ def run_simulation(country: str, args) -> tuple[Simulation, list[float]]:
 
     cc = CountryConfiguration.n_industry_default(dw.n_industries) if use_disagg else CountryConfiguration()
 
+    sch = None  # PITSchedule for CAN_BC (captured by CPI-indexing posthook)
     if upper == "CAN_BC":
-        sch = PITSchedule.from_name("BC_PIT_2014.csv")
+        sch = PITSchedule.from_name_with_cpi("BC_PIT_2014.csv")
         thr, r, _, _ = sch.get_brackets(tax_year=sch.base_year)
         cc.central_government = CentralGovernmentConfiguration(
             pit_brackets=[(float(thr[i]), float(r[i])) for i in range(len(thr))],
+            pit_basic_deduction=sch.basic_deduction,
             functions=cc.central_government.functions,
         )
+        if sch.basic_deduction is not None:
+            print(f"  [{upper}] basic_deduction=${sch.basic_deduction:,.0f} "
+                  f"(credit @ {r[0]:.1%} = ${sch.basic_deduction * r[0]:,.0f})")
         print(f"  [{upper}] {len(thr)} PIT brackets loaded")
 
     sim_key = parent
@@ -102,6 +107,20 @@ def run_simulation(country: str, args) -> tuple[Simulation, list[float]]:
 
     rates: list[float] = []
     sim.posthooks.append(_tax_rate_collector(rates, sim_key))
+
+    # ── CPI-index PIT bracket thresholds & basic_deduction every year ──
+    if sch is not None:
+        _schedule = sch
+        _sim_key = sim_key
+        def _index_pit_brackets(_sim, t, year, month):
+            if t > 0 and month == 1:
+                cg = _sim.countries[_sim_key].central_government
+                cg.step_pit_brackets(
+                    tax_year=year,
+                    cpi_map=_schedule.cpi_map,
+                    base_year=_schedule.base_year,
+                )
+        sim.posthooks.append(_index_pit_brackets)
 
     sim.run()
     print(f"  [{upper}] done in {time.perf_counter() - t0:.1f}s")

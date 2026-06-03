@@ -1,7 +1,23 @@
-name: Run Canada and France simulations
+name: Run simulations
 
 on:
-  workflow_dispatch:          # manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      country:
+        description: 'Country/region code'
+        required: true
+        default: 'FRA'
+        type: string
+      scale:
+        description: 'Scale factor (lower = more agents, higher aggregation)'
+        required: false
+        default: '10000'
+        type: string
+      t-max:
+        description: 'Number of timesteps'
+        required: false
+        default: '20'
+        type: string
   push:
     branches:
       - main
@@ -23,7 +39,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        country: [CAN, FRA]
+        country: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.country)) || fromJSON('["CAN", "FRA"]') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -45,8 +61,19 @@ jobs:
       - name: Install project dependencies
         run: uv sync --python ${{ matrix.python-version }} --extra dev
 
+      - name: Resolve simulation parameters
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "scale=${{ inputs.scale }}" >> "$GITHUB_OUTPUT"
+            echo "tmax=${{ inputs.t-max }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "scale=10000" >> "$GITHUB_OUTPUT"
+            echo "tmax=20" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run ${{ matrix.country }} simulation
-        run: uv run python test_run/run_simulation.py ${{ matrix.country }}
+        run: uv run python test_run/run_simulation.py ${{ matrix.country }} --scale ${{ steps.params.outputs.scale }} --t-max ${{ steps.params.outputs.tmax }}
 
       - name: Inspect income for ${{ matrix.country }}
         run: uv run python test_run/inspect_income.py ${{ matrix.country }}

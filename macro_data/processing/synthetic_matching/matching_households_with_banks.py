@@ -35,6 +35,8 @@ Note:
     are implemented in the simulation package.
 """
 
+import warnings
+
 import numpy as np
 import scipy as sp
 from scipy.optimize import linear_sum_assignment as lsa
@@ -43,6 +45,12 @@ from macro_data.processing.synthetic_banks.synthetic_banks import SyntheticBanks
 from macro_data.processing.synthetic_population.synthetic_population import (
     SyntheticPopulation,
 )
+
+# Maximum number of households for which the full N×N distance matrix
+# is computed in the optimal (Hungarian) assignment.  Beyond this threshold
+# we fall back to random matching to avoid O(N²) memory blow-up.
+# At 10 000 households the distance matrix is ~800 MB (float64).
+_MAX_OPTIMAL_HOUSEHOLDS = 10_000
 
 
 def match_households_with_banks_random(
@@ -98,6 +106,18 @@ def match_households_with_banks_optimal(
         population (SyntheticPopulation): Household financial data
         banks (SyntheticBanks): Bank balance sheet data
     """
+    n_households = population.household_data.shape[0]
+
+    if n_households > _MAX_OPTIMAL_HOUSEHOLDS:
+        warnings.warn(
+            f"Number of households ({n_households:,}) exceeds the optimal-matching "
+            f"threshold ({_MAX_OPTIMAL_HOUSEHOLDS:,}).  Falling back to random "
+            f"household→bank assignment to avoid excessive memory usage.",
+            stacklevel=2,
+        )
+        match_households_with_banks_random(population, banks)
+        return
+
     # rescale
     rescale(population, "Wealth in Deposits", banks, "Deposits from Households")
     rescale(population, "Debt", banks, "Loans to Households")

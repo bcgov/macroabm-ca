@@ -152,15 +152,19 @@ def main():
     # ── Progressive PIT (auto-activated for CAN_BC) ────────────
     if country == "CAN_BC":
         print(f"\n  Activating BC progressive PIT schedule ...")
-        schedule = PITSchedule.from_name("BC_PIT_2014.csv")
+        schedule = PITSchedule.from_name_with_cpi("BC_PIT_2014.csv")
         print(f"  PIT base year: {schedule.base_year}, CPI years: {sorted(schedule.cpi_map)}")
         thresholds, rates, _, _ = schedule.get_brackets(tax_year=schedule.base_year)
 
         brackets = [(float(thresholds[i]), float(rates[i])) for i in range(len(thresholds))]
         country_config.central_government = CentralGovernmentConfiguration(
             pit_brackets=brackets,
+            pit_basic_deduction=schedule.basic_deduction,
             functions=country_config.central_government.functions,
         )
+        if schedule.basic_deduction is not None:
+            print(f"  Basic personal amount: ${schedule.basic_deduction:,.0f} "
+                  f"(credit @ {rates[0]:.1%} = ${schedule.basic_deduction * rates[0]:,.0f})")
         print(f"  Progressive PIT: {len(brackets)} brackets")
         for i, (thresh, rate) in enumerate(brackets):
             print(f"    Bracket {i+1}: up to {thresh:>12,.0f} @ {rate:.1%}")
@@ -184,6 +188,24 @@ def main():
         datawrapper=datawrapper, 
         simulation_configuration=sim_config
     )
+
+    # ── CPI-index PIT bracket thresholds every year ──────────
+    # BC indexes its income-tax brackets to CPI every year.
+    # We fire on month==1 (January) so the hook works correctly
+    # regardless of the timestep increment (monthly / quarterly / annual).
+    if country == "CAN_BC":
+        _schedule = schedule          # capture for closure
+        _sim_key = sim_key
+        def _index_pit_brackets(_sim, t, year, month):
+            if t > 0 and month == 1:
+                cg = _sim.countries[_sim_key].central_government
+                cg.step_pit_brackets(
+                    tax_year=year,
+                    cpi_map=_schedule.cpi_map,
+                    base_year=_schedule.base_year,
+                )
+        simulation.posthooks.append(_index_pit_brackets)
+
     simulation.run()
     step_elapsed = time.perf_counter() - step_start
     print(f"  Simulation complete in {format_duration(step_elapsed)}")

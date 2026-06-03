@@ -35,6 +35,13 @@ annual CPI inflation rate directly in the CSV.  All rows for the same
 When absent, call :meth:`from_csv_with_cpi` to pull inflation from the
 cached ``bc_cpi_inflation.csv`` or StatCan.
 
+An optional eighth column ``basic_deduction`` supplies the basic
+personal amount (non-refundable tax credit base) for the tax year.
+All rows for the same ``tax_year`` must share the same value.  The
+credit applied is ``basic_deduction × lowest_marginal_rate``, subtracted
+after the progressive calculation.  When CPI-indexing is active, this
+value is compound-inflated alongside the indexed lower bounds.
+
 A row with ``step = k`` defines bracket *k* spanning
 [lower_bound_k, lower_bound_{k+1}] (or [lower_bound_k, ∞) for the
 highest step).
@@ -365,10 +372,12 @@ class PITSchedule:
         self,
         df: pd.DataFrame,
         cpi_map: Optional[dict[int, float]] = None,
+        basic_deduction: Optional[float] = None,
     ) -> None:
         self._df = df.copy()
         self._base_year: int = int(self._df["tax_year"].iloc[0])
         self._cpi_map: dict[int, float] = dict(cpi_map) if cpi_map else {}
+        self._basic_deduction: Optional[float] = basic_deduction
 
     # ── factories ───────────────────────────────────────────────────
 
@@ -424,7 +433,21 @@ class PITSchedule:
                 )
             cpi_map = dict(zip(infl["tax_year"].astype(int), infl[inflation_col]))
 
-        return cls(df, cpi_map=cpi_map)
+        # Optional basic_deduction column: non-refundable tax credit base.
+        basic_deduction: Optional[float] = None
+        for c in df.columns:
+            if c.lower() == "basic_deduction":
+                raw_vals = df[c].astype(str).str.replace(",", "").astype(float)
+                unique_vals = raw_vals.drop_duplicates()
+                if len(unique_vals) > 1:
+                    raise ValueError(
+                        "Inconsistent basic_deduction values: multiple rows "
+                        "for the same tax_year have different values."
+                    )
+                basic_deduction = float(unique_vals.iloc[0])
+                break
+
+        return cls(df, cpi_map=cpi_map, basic_deduction=basic_deduction)
 
     @classmethod
     def from_name(
@@ -440,6 +463,35 @@ class PITSchedule:
                 f"Available: {sorted([p.name for p in _PIT_SCHEDULE_DIR.glob('*.csv')])}"
             )
         return cls.from_csv(path, cpi_map=cpi_map)
+
+    @classmethod
+    def from_name_with_cpi(
+        cls,
+        filename: str,
+        force_refresh: bool = False,
+    ) -> "PITSchedule":
+        """Load a schedule by filename from ``spoof_data/freda/`` with CPI.
+
+        Resolution order:
+        1. If the CSV has an ``inflation`` column → use it (no fetch).
+        2. Else if ``bc_cpi_inflation.csv`` exists → load from cache.
+        3. Else → fetch live from StatCan table 18-10-0005-01.
+
+        Args:
+            filename: CSV filename (e.g. ``"BC_PIT_2014.csv"``).
+            force_refresh: If ``True``, re-download CPI from StatCan
+                (ignored when the CSV has an ``inflation`` column).
+
+        Returns:
+            A ``PITSchedule`` with CPI inflation data.
+        """
+        path = _PIT_SCHEDULE_DIR / filename
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Schedule file not found: {path}\n"
+                f"Available: {sorted([p.name for p in _PIT_SCHEDULE_DIR.glob('*.csv')])}"
+            )
+        return cls.from_csv_with_cpi(path, force_refresh=force_refresh)
 
     @classmethod
     def from_csv_with_cpi(
@@ -495,6 +547,49 @@ class PITSchedule:
     def cpi_map(self) -> dict[int, float]:
         """Annual BC CPI inflation rates ``{year: rate}``."""
         return dict(self._cpi_map)
+
+    @property
+    def basic_deduction(self) -> Optional[float]:
+        """Basic personal amount (non-refundable credit base) for the base year.
+
+        Returns ``None`` when the CSV did not include a ``basic_deduction``
+        column.
+        """
+        return self._basic_deduction
+
+    def get_basic_deduction(self, tax_year: int) -> Optional[float]:
+        """Return the CPI-inflated basic deduction for *tax_year*.
+
+        When *tax_year* is later than :attr:`base_year`, the value is
+        compound-inflated using the same factor applied to indexed
+        lower bounds.  Returns ``None`` when no basic deduction is
+        configured.
+
+        Args:
+            tax_year: The tax year to retrieve.
+
+        Returns:
+            Inflated basic deduction, or ``None``.
+
+        Raises:
+            ValueError: If CPI data for an intermediate year is missing.
+        """
+        if self._basic_deduction is None:
+            return None
+        if tax_year <= self.base_year:
+            return self._basic_deduction
+
+        factor = 1.0
+        for y in range(self.base_year, tax_year):
+            rate = self._cpi_map.get(y)
+            if rate is None:
+                raise ValueError(
+                    f"Missing CPI inflation for year {y} "
+                    f"(needed to inflate basic_deduction {self.base_year} → {tax_year}). "
+                    f"Available years: {sorted(self._cpi_map)}"
+                )
+            factor *= 1.0 + rate
+        return self._basic_deduction * factor
 
     # ── public methods ──────────────────────────────────────────────
 

@@ -1269,8 +1269,14 @@ class WaterBucketCreditMarketClearer(CreditMarketClearer):
             loan_matrix = np.outer(supply_weights, received_loans_by_debtors)
             for bank_idx in range(len(supply_weights)):
                 new_loans[0, bank_idx, agents_with_demand] = loan_matrix[bank_idx, :]
-        new_loans[1, :, agents_with_demand] = banks_ir[:, np.newaxis] * new_loans[0, :, agents_with_demand]
-        new_loans[2, :, agents_with_demand] = 1.0 / loan_maturity * new_loans[0, :, agents_with_demand]
+        # Fix NumPy advanced indexing dimension mismatch by assigning row-by-row
+        for bank_idx in range(len(banks_ir)):
+            new_loans[1, bank_idx, agents_with_demand] = (
+                banks_ir[bank_idx] * new_loans[0, bank_idx, agents_with_demand]
+            )
+            new_loans[2, bank_idx, agents_with_demand] = (
+                1.0 / loan_maturity * new_loans[0, bank_idx, agents_with_demand]
+            )
 
         return new_loans
 

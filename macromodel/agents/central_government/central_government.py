@@ -83,6 +83,17 @@ class CentralGovernment(Agent):
         )
         self.functions = functions
 
+        # Snapshot base thresholds for CPI inflation indexing.
+        # When step_pit_brackets() is called mid-simulation, the stored
+        # nominal values are compound-inflated and written back to states.
+        if "pit_thresholds" in states:
+            self.pit_base_thresholds = states["pit_thresholds"].copy()
+        else:
+            self.pit_base_thresholds = None
+
+        # Snapshot base basic_deduction for CPI inflation indexing.
+        self.pit_base_basic_deduction: Optional[float] = states.get("pit_basic_deduction")
+
     @classmethod
     def from_pickled_agent(
         cls,
@@ -137,6 +148,8 @@ class CentralGovernment(Agent):
             brackets = np.array(configuration.pit_brackets, dtype=float)
             states["pit_thresholds"] = brackets[:, 0]
             states["pit_rates"] = brackets[:, 1]
+            if configuration.pit_basic_deduction is not None:
+                states["pit_basic_deduction"] = configuration.pit_basic_deduction
 
         data = (synthetic_central_government.central_gov_data.astype(float)).rename_axis("Central Government ID")
 
@@ -324,6 +337,14 @@ class CentralGovernment(Agent):
             # --- Progressive PIT on employee income ---
             taxable_wages = current_ind_employee_income * (1 - self.states["Employee Social Insurance Tax"])
             pit_per_individual = compute_progressive_tax(taxable_wages, pit_thresholds, pit_rates)
+
+            # Apply non-refundable basic personal amount credit when configured.
+            # Credit = basic_deduction × lowest_marginal_rate, capped so tax ≥ 0.
+            pit_basic_deduction = self.states.get("pit_basic_deduction")
+            if pit_basic_deduction is not None and pit_basic_deduction > 0:
+                credit = pit_basic_deduction * float(pit_rates[0])
+                pit_per_individual = np.maximum(0.0, pit_per_individual - credit)
+
             wage_tax_revenue = pit_per_individual.sum()
 
             # Rental and financial income remain taxed at the flat effective rate
@@ -378,6 +399,45 @@ class CentralGovernment(Agent):
             + self.ts.current("taxes_cf")[0]
             + self.ts.current("taxes_exports")[0]
         )
+
+    def step_pit_brackets(
+        self,
+        tax_year: int,
+        cpi_map: dict[int, float],
+        base_year: int,
+    ) -> None:
+        """Inflate PIT thresholds & basic deduction with compound CPI.
+
+        Recomputes ``states["pit_thresholds"]`` and
+        ``states["pit_basic_deduction"]`` by compounding annual CPI
+        inflation rates.  The nominal values stored at construction
+        are never modified — inflation is always computed from those
+        original values, making repeated calls safe (e.g. when
+        *tax_year* advances but CPI map is extended).
+
+        Call this once per simulated year (every 4 quarterly timesteps)
+        to mirror real-world bracket indexation.
+
+        Args:
+            tax_year: Current tax year.
+            cpi_map: ``{year: inflation_rate}`` mapping (0.018 = 1.8 %).
+            base_year: Year whose thresholds are the nominal base.
+        """
+        if self.pit_base_thresholds is None:
+            return
+        if tax_year <= base_year or not cpi_map:
+            return
+
+        factor = 1.0
+        for y in range(base_year, tax_year):
+            rate = cpi_map.get(y)
+            if rate is not None:
+                factor *= 1.0 + rate
+
+        self.states["pit_thresholds"] = self.pit_base_thresholds * factor
+
+        if self.pit_base_basic_deduction is not None:
+            self.states["pit_basic_deduction"] = self.pit_base_basic_deduction * factor
 
     def compute_revenue(
         self,

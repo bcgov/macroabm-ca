@@ -40,3 +40,12 @@ class CentralGovernmentConfiguration(BaseModel):
         "None means use the flat Income Tax rate.",
     )
 
+    # Basic personal amount for non-refundable tax credit.
+    # The credit is basic_deduction × lowest_marginal_rate, subtracted
+    # after the progressive calculation.  Inflated alongside brackets
+    # when CPI-indexing is active.  None means no credit applied.
+    pit_basic_deduction: Optional[float] = Field(
+        default=None,
+        description="Basic personal amount (non-refundable credit base) for PIT.",
+    )
+
