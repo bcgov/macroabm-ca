@@ -27,6 +27,11 @@ on:
         required: false
         default: '20'
         type: string
+      compare-bc:
+        description: 'Run CAN vs CAN_BC comparison (overrides country selection)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   simulate:
@@ -56,13 +61,20 @@ jobs:
       - name: Install project dependencies
         run: uv sync --python ${{ matrix.python-version }} --extra dev
 
+      - name: Run CAN vs CAN_BC comparison
+        if: inputs.compare-bc
+        run: uv run python test_run/compare_can_bc.py --scale ${{ inputs.scale }} --t-max ${{ inputs.t-max }}
+
       - name: Run ${{ matrix.country }} simulation
+        if: ${{ ! inputs.compare-bc }}
         run: uv run python test_run/run_simulation.py ${{ matrix.country }} --scale ${{ inputs.scale }} --t-max ${{ inputs.t-max }}
 
       - name: Inspect income for ${{ matrix.country }}
+        if: ${{ ! inputs.compare-bc }}
         run: uv run python test_run/inspect_income.py ${{ matrix.country }}
 
       - name: Generate summary and visualizations for ${{ matrix.country }}
+        if: ${{ ! inputs.compare-bc }}
         run: uv run python test_run/summary_and_viz.py ${{ matrix.country }}
 
       - name: List output
