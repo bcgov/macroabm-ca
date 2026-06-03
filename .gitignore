@@ -162,7 +162,6 @@ inet-macro-dev/
 macro-dev/
 
 # FIN/FREDA-related folders
-spoof_data/freda
 ^freda*
 
 # Test run artifacts
