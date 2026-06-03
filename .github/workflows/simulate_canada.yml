@@ -18,20 +18,6 @@ on:
         required: false
         default: '20'
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - "macromodel/**"
-      - "macro_data/**"
-      - "macrocalib/**"
-      - "test_run/**"
-  pull_request:
-    paths:
-      - "macromodel/**"
-      - "macro_data/**"
-      - "macrocalib/**"
-      - "test_run/**"
 
 jobs:
   simulate:
@@ -39,7 +25,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        country: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.country)) || fromJSON('["CAN", "FRA"]') }}
+        country: ${{ fromJSON(format('["{0}"]', inputs.country)) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -61,19 +47,8 @@ jobs:
       - name: Install project dependencies
         run: uv sync --python ${{ matrix.python-version }} --extra dev
 
-      - name: Resolve simulation parameters
-        id: params
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "scale=${{ inputs.scale }}" >> "$GITHUB_OUTPUT"
-            echo "tmax=${{ inputs.t-max }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "scale=10000" >> "$GITHUB_OUTPUT"
-            echo "tmax=20" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Run ${{ matrix.country }} simulation
-        run: uv run python test_run/run_simulation.py ${{ matrix.country }} --scale ${{ steps.params.outputs.scale }} --t-max ${{ steps.params.outputs.tmax }}
+        run: uv run python test_run/run_simulation.py ${{ matrix.country }} --scale ${{ inputs.scale }} --t-max ${{ inputs.t-max }}
 
       - name: Inspect income for ${{ matrix.country }}
         run: uv run python test_run/inspect_income.py ${{ matrix.country }}
