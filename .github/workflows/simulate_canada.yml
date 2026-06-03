@@ -4,9 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       country:
-        description: 'Country/region code'
+        description: 'Country / region'
         required: true
         default: 'FRA'
+        type: choice
+        options:
+          - 'FRA'
+          - 'CAN'
+          - 'CAN_BC'
+      custom-country:
+        description: 'Override (free-text country code; leave blank to use the dropdown above)'
+        required: false
+        default: ''
         type: string
       scale:
         description: 'Scale factor (lower = more agents, higher aggregation)'
@@ -25,7 +34,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        country: ${{ fromJSON(format('["{0}"]', inputs.country)) }}
+        country: ${{ fromJSON(format('["{0}"]', inputs.custom-country != '' && inputs.custom-country || inputs.country)) }}
 
     steps:
       - uses: actions/checkout@v4
