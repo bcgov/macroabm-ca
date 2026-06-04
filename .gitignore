@@ -166,3 +166,6 @@ macro-dev/
 
 # Test run artifacts
 output/
+
+# Raw data folder
+raw_data/
