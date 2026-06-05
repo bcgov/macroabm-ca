@@ -7,6 +7,7 @@ import pytest
 
 from macro_data.configuration.countries import Country as CountryName
 from macromodel.configurations import CountryConfiguration, SimulationConfiguration
+from macromodel.configurations.central_government_configuration import CentralGovernmentConfiguration
 from macromodel.simulation import Simulation, check_compatibility
 
 
@@ -804,3 +805,44 @@ def test_heterogeneous_investment_effectiveness(datawrapper):
         total_invested = sum(inv.sum() for inv in total_investment_history)
         # Just verify no errors - investment amount depends on profitability
         assert total_invested >= 0
+
+
+def test_simulation_with_progressive_pit(datawrapper):
+    """Full simulation with progressive PIT brackets — smoke test.
+
+    Configures a 2-bracket progressive schedule for FRA, runs 3 timesteps,
+    and verifies:
+    - pit_thresholds/rates are stored in central_government.states
+    - income tax revenue is positive
+    - the effective Income Tax rate is updated each period
+    """
+    cc = CountryConfiguration()
+    cc.central_government = CentralGovernmentConfiguration(
+        pit_brackets=[(37606, 0.0506), (np.inf, 0.20)],
+        functions=cc.central_government.functions,
+    )
+    config = SimulationConfiguration(
+        country_configurations={"FRA": cc}, t_max=3, seed=0
+    )
+
+    sim = Simulation.from_datawrapper(
+        datawrapper=datawrapper, simulation_configuration=config
+    )
+    sim.run()
+
+    cg = sim.countries["FRA"].central_government
+
+    # PIT states must be present
+    assert "pit_thresholds" in cg.states, "pit_thresholds missing"
+    assert "pit_rates" in cg.states, "pit_rates missing"
+    assert len(cg.states["pit_thresholds"]) == 2
+
+    # Income tax revenue exists and is positive
+    tax_history = cg.ts.get_aggregate("taxes_income")
+    assert len(tax_history) > 0
+    assert np.all(np.isfinite(tax_history))
+    assert tax_history[-1] > 0, f"Income tax should be > 0, got {tax_history[-1]}"
+
+    # Effective Income Tax rate should be in [0, 1]
+    rate = cg.states["Income Tax"]
+    assert 0.0 < rate < 1.0, f"Effective rate {rate} not in (0, 1)"
