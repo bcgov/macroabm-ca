@@ -324,10 +324,40 @@ class DataReaders:
                 raise ValueError("Must provide regional disaggregation dictionary.")
             if simulation_year != 2014:
                 raise ValueError("Only 2014 is supported for this reader.")
-            disagg_path = raw_data_path / "icio" / "icio_2014_can_provinces.csv"
+
+            # Prefer the remapped table (fully canonical 50-sector); fall
+            # back to the original hybrid-coding table when unavailable.
+            remapped_path = raw_data_path / "icio" / "icio_2014_can_provinces_remapped.csv"
+            original_path = raw_data_path / "icio" / "icio_2014_can_provinces.csv"
+            if remapped_path.exists():
+                disagg_path = remapped_path
+            elif original_path.exists():
+                disagg_path = original_path
+            else:
+                raise FileNotFoundError(
+                    f"Neither {remapped_path.name} nor {original_path.name} found "
+                    f"in {raw_data_path / 'icio'}"
+                )
+
             df = pd.read_csv(disagg_path, header=[0, 1], index_col=[0, 1])
 
-            df *= 1e6  # Scale to millions
+            if disagg_path == original_path:
+                df *= 1e6  # Scale to millions — original is in raw units
+
+            # Derive industries from the loaded table rather than relying
+            # solely on the passed-in list (the remapped table may have
+            # additional sub-sector splits like D01a..D01e).
+            _non_ind = {"Fixed Capital Formation", "Government Consumption",
+                        "Household Consumption", "Output",
+                        "Household Fixed Capital Formation", "Intermediate Inputs"}
+            table_industries = [i for i in df.columns.get_level_values(1).unique()
+                               if i not in _non_ind and i != "Output"]
+            # Merge: keep any passed-in industry that appears in the table,
+            # plus any table-only industry not in the passed-in list.
+            industries = list(dict.fromkeys(
+                [i for i in industries if i in table_industries]
+                + [i for i in table_industries if i not in industries]
+            ))
 
             all_provinces = []
             for key, value in regions_dict.items():
@@ -367,6 +397,7 @@ class DataReaders:
 
             icio[simulation_year].iot = df.sort_index()
             icio[simulation_year].considered_countries = countries_and_regions
+            icio[simulation_year].industries = industries
 
             for large_country, regions in regions_dict.items():
                 for region in regions:
