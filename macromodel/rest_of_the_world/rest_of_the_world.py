@@ -423,7 +423,7 @@ class RestOfTheWorld(Agent):
         Updates time series with actual trade volumes and values.
         """
         self.ts.exports_real.append(self.ts.current("real_amount_sold"))
-        self.ts.total_exports.append([self.ts.current("exports_real").sum()])
+        self.ts.total_exports.append([np.nansum(self.ts.current("exports_real"))])
         self.ts.imports_in_usd.append(self.ts.current("nominal_amount_spent_in_lcu")[0])
         self.ts.imports_in_lcu.append(self.exchange_rate_usd_to_lcu * self.ts.current("imports_in_usd"))
         self.ts.total_imports.append([self.ts.current("imports_in_lcu").sum()])

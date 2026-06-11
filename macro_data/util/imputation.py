@@ -100,8 +100,12 @@ def apply_iterative_imputer(
     """
     imputer = IterativeImputer(**imputer_args)
     if selection is None:
+        if df[columns].shape[0] == 0:
+            return df
         df.loc[:, columns] = imputer.fit_transform(df[columns].values)
         return df
     else:
+        if df.loc[selection, columns].shape[0] == 0:
+            return df
         df.loc[selection, columns] = imputer.fit_transform(df.loc[selection, columns].values)
         return df

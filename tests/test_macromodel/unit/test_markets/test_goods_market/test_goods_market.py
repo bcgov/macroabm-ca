@@ -3,6 +3,10 @@ from typing import Tuple
 import numpy as np
 
 from macromodel.agents.agent import Agent
+from macromodel.markets.goods_market.func.lib_water_bucket import (
+    get_seller_priorities_deterministic,
+    get_seller_priorities_stochastic,
+)
 from macromodel.markets.goods_market.value_type import ValueType
 from macromodel.timeseries import TimeSeries
 
@@ -139,3 +143,27 @@ class TestGoodsMarket:
         # Check basics
         check_things_adding_up(firms, households)
         check_excess_demand(firms, households)
+
+    def test__empty_seller_priorities(self):
+        productions = np.empty(0)
+        prices = np.empty(0)
+
+        distribution, priorities = get_seller_priorities_deterministic(
+            productions=productions,
+            prices=prices,
+            price_temperature=1.0,
+            distribution_type="multiplicative",
+        )
+
+        assert distribution.size == 0
+        assert priorities.size == 0
+
+        distribution, priorities = get_seller_priorities_stochastic(
+            productions=productions,
+            prices=prices,
+            price_temperature=1.0,
+            distribution_type="multiplicative",
+        )
+
+        assert distribution.size == 0
+        assert priorities.size == 0
