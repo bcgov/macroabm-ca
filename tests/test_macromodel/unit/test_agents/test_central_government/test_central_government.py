@@ -228,7 +228,7 @@ class TestCentralGovernmentPIT:
         """pit_basic_deduction is stored in states when configured."""
         cg = test_central_government_pit_full
         assert "pit_basic_deduction" in cg.states
-        assert cg.states["pit_basic_deduction"] == 9869.0
+        assert cg.states["pit_basic_deduction"] == 0.0
 
     def test_basic_deduction_not_stored_without_config(self, test_central_government_pit):
         """Without pit_basic_deduction in config, state key is absent."""
@@ -240,10 +240,10 @@ class TestCentralGovernmentPIT:
         assert "pit_taxable_income_deductions" in cg.states
         assert cg.states["pit_taxable_income_deductions"] == 9869.0
 
-    def test_basic_deduction_lowers_tax_revenue(
+    def test_taxable_income_deductions_lower_tax_revenue(
         self, test_central_government_pit_full,
     ):
-        """The basic personal amount credit reduces tax revenue."""
+        """Taxable-income deductions reduce tax revenue vs raw PIT."""
         cg = test_central_government_pit_full
 
         emp_income = np.array([50000.0, 50000.0])
@@ -266,7 +266,6 @@ class TestCentralGovernmentPIT:
         )
 
         # Tax revenue with deductions < without deductions
-        # (for the same brackets without deductions)
         tax_with_deductions = cg.ts.get_aggregate("taxes_income")[-1]
 
         # Compare: compute raw progressive tax without deductions
@@ -319,17 +318,20 @@ class TestCentralGovernmentPIT:
     def test_step_pit_brackets_inflates_basic_deduction(
         self, test_central_government_pit_full,
     ):
-        """CPI inflation also inflates pit_basic_deduction."""
+        """CPI inflation inflates pit_basic_deduction (set to non-zero
+        for this test to verify the plumbing)."""
         cg = test_central_government_pit_full
         assert cg.pit_base_basic_deduction is not None
 
-        original = cg.states["pit_basic_deduction"]
-        cpi_map = {2014: 0.01, 2015: 0.02, 2016: 0.015}
+        # Seed a non-zero value to verify inflation works
+        cg.states["pit_basic_deduction"] = 5000.0
+        cg.pit_base_basic_deduction = 5000.0
 
+        cpi_map = {2014: 0.01, 2015: 0.02, 2016: 0.015}
         cg.step_pit_brackets(tax_year=2017, cpi_map=cpi_map, base_year=2014)
 
         factor = 1.01 * 1.02 * 1.015
-        expected = original * factor
+        expected = 5000.0 * factor
         assert cg.states["pit_basic_deduction"] == pytest.approx(expected)
 
     def test_step_pit_brackets_inflates_taxable_income_deductions(
@@ -409,18 +411,18 @@ class TestCentralGovernmentPIT:
             f"Pre-calibrated effective rate {rate:.4f} should be between 5% and 17%"
         )
 
-    def test_pre_calibration_with_deductions_credit(
+    def test_pre_calibration_with_deductions(
         self, test_central_government_pit_full,
     ):
-        """With both deductions and basic credit, the pre-calibrated
-        effective rate is lower than brackets-only."""
+        """With taxable-income deductions, the pre-calibrated effective
+        rate is lower than brackets-only."""
         cg = test_central_government_pit_full
 
         # The effective rate should be lower than the brackets-only case
-        # because deductions + credit reduce the total tax take
+        # because the taxable-income deduction reduces taxable base
         rate = cg.states["Income Tax"]
-        # With BC-like brackets (5.06% lowest), deductions will push effective
-        # well below the no-deduction case
+        # With BC-like brackets (5.06% lowest), deductions push effective
+        # below the no-deduction case
         assert rate < 0.10, (
             f"Effective rate with deductions ({rate:.4f}) should be < 10%"
         )
