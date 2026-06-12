@@ -44,9 +44,15 @@ class CentralGovernmentConfiguration(BaseModel):
     # The credit is basic_deduction × lowest_marginal_rate, subtracted
     # after the progressive calculation.  Inflated alongside brackets
     # when CPI-indexing is active.  None means no credit applied.
+    #
+    # NOTE: In BC's real tax system the Basic Personal Amount (BPA) is
+    # a deduction from taxable income, NOT a post-bracket credit.
+    # Use ``pit_taxable_income_deductions`` for the BPA.  Use this
+    # field for credits that genuinely apply after brackets (e.g.
+    # charitable donation credit, tuition credit).
     pit_basic_deduction: Optional[float] = Field(
         default=None,
-        description="Basic personal amount (non-refundable credit base) for PIT.",
+        description="Non-refundable tax credit base (post-bracket). NOT the BPA.",
     )
 
     # Per-individual deduction(s) subtracted from the combined taxable

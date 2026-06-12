@@ -76,7 +76,7 @@ if pit_csv_arg:
     pit_basic_deduction = schedule.basic_deduction
     pit_label = f" | PIT: {pit_csv_arg} ({schedule.base_year})"
     if pit_basic_deduction is not None:
-        pit_label += f" | basic_deduction=${pit_basic_deduction:,.0f}"
+        pit_label += f" | bpa=${pit_basic_deduction:,.0f}"
     print(f"PIT schedule loaded: {len(pit_thresholds)} brackets from {pit_csv_arg}")
 
 
@@ -121,28 +121,28 @@ with h5py.File(H5_PATH, "r") as f:
     if pit_thresholds is not None:
         from macro_data.readers.taxation.personal_income_tax.pit_schedule import compute_progressive_tax
 
-        # Taxable base = employee income (same as in CentralGovernment.compute_taxes)
-        pit_tax = compute_progressive_tax(ind_emp_income, pit_thresholds, pit_rates)
-
-        # Apply non-refundable basic personal amount credit when configured.
+        # Taxable base = employee income, with BPA deducted before brackets
+        taxable = ind_emp_income.copy()
         if pit_basic_deduction is not None and pit_basic_deduction > 0:
-            credit = pit_basic_deduction * float(pit_rates[0])
-            pit_tax = np.maximum(0.0, pit_tax - credit)
+            taxable = np.maximum(0.0, taxable - pit_basic_deduction)
+
+        pit_tax = compute_progressive_tax(taxable, pit_thresholds, pit_rates)
 
         total_tax = pit_tax.sum()
-        total_taxable = ind_emp_income.sum()
-        eff_rate = total_tax / total_taxable if total_taxable > 0 else 0.0
+        total_emp = ind_emp_income.sum()
+        total_taxable = taxable.sum()
+        eff_rate = total_tax / total_emp if total_emp > 0 else 0.0
 
         print(f"\n===== PERSONAL INCOME TAX (initial state) =====")
         if pit_basic_deduction is not None:
-            print(f"  Basic personal amount:   ${pit_basic_deduction:,.0f}  "
-                  f"(credit @ {pit_rates[0]:.1%} = ${pit_basic_deduction * pit_rates[0]:,.0f})")
-        print(f"  Total employee income:  {total_taxable:,.6f}")
-        print(f"  Total PIT revenue:      {total_tax:,.6f}")
-        print(f"  Effective rate:         {eff_rate:.4%}")
-        print(f"  Mean tax per agent:     {pit_tax.mean():,.6f}")
-        print(f"  Median tax per agent:   {np.median(pit_tax):,.6f}")
-        print(f"  Max tax:                {pit_tax.max():,.6f}")
+            print(f"  Basic personal amount (deduction):  ${pit_basic_deduction:,.0f}")
+        print(f"  Total employee income:              {total_emp:,.6f}")
+        print(f"  Total taxable income (after BPA):   {total_taxable:,.6f}")
+        print(f"  Total PIT revenue:                  {total_tax:,.6f}")
+        print(f"  Effective rate (on gross emp inc):  {eff_rate:.4%}")
+        print(f"  Mean tax per agent:                 {pit_tax.mean():,.6f}")
+        print(f"  Median tax per agent:               {np.median(pit_tax):,.6f}")
+        print(f"  Max tax:                            {pit_tax.max():,.6f}")
         print(f"  Zero-tax individuals:   {(pit_tax == 0).sum()} ({(pit_tax == 0).mean()*100:.1f}%)")
         print(f"\n  PIT by employee-income decile:")
         # Use quantile-based bins so each decile gets ~10% of individuals,
