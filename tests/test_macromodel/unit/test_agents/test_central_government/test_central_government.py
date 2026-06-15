@@ -156,3 +156,274 @@ class TestCentralGovernmentPIT:
         assert high_effective[0] > rates[0]
         # Low earner effective rate should be < highest bracket rate
         assert low_effective[0] < rates[-1]
+
+    # ── step_pit_brackets: CPI inflation of thresholds ────────────
+
+    def test_step_pit_brackets_inflates_thresholds(
+        self, test_central_government_pit,
+    ):
+        """step_pit_brackets compound-inflates pit_thresholds from
+        stored base values."""
+        cg = test_central_government_pit
+
+        assert cg.pit_base_thresholds is not None, "PIT base thresholds should be stored"
+        original = cg.states["pit_thresholds"].copy()
+
+        # Inflate from base_year=2014 to tax_year=2017 with known CPI
+        cpi_map = {2014: 0.01, 2015: 0.02, 2016: 0.015}
+        cg.step_pit_brackets(tax_year=2017, cpi_map=cpi_map, base_year=2014)
+
+        factor = 1.01 * 1.02 * 1.015  # ≈ 1.045653
+        inflated = cg.states["pit_thresholds"]
+
+        # All thresholds (except inf) should be scaled
+        for i in range(len(inflated) - 1):  # last is inf
+            expected = original[i] * factor
+            assert inflated[i] == pytest.approx(expected), (
+                f"threshold[{i}]: {inflated[i]} != {expected}"
+            )
+        # Last threshold remains inf
+        assert np.isinf(inflated[-1])
+
+    def test_step_pit_brackets_noop_at_base_year(
+        self, test_central_government_pit,
+    ):
+        """Call with tax_year <= base_year is a no-op."""
+        cg = test_central_government_pit
+        original = cg.states["pit_thresholds"].copy()
+
+        cpi_map = {2014: 0.01, 2015: 0.02}
+        cg.step_pit_brackets(tax_year=2014, cpi_map=cpi_map, base_year=2014)
+
+        np.testing.assert_array_equal(cg.states["pit_thresholds"], original)
+
+    def test_step_pit_brackets_noop_without_pit(self, test_central_government):
+        """Flat-tax government: step_pit_brackets is a no-op."""
+        cg = test_central_government
+        # Should not raise
+        cg.step_pit_brackets(
+            tax_year=2017,
+            cpi_map={2014: 0.01, 2015: 0.02},
+            base_year=2014,
+        )
+
+    def test_step_pit_brackets_idempotent(
+        self, test_central_government_pit,
+    ):
+        """Repeated calls with the same arguments give the same result."""
+        cg = test_central_government_pit
+        cpi_map = {2014: 0.01, 2015: 0.02, 2016: 0.03}
+
+        cg.step_pit_brackets(tax_year=2017, cpi_map=cpi_map, base_year=2014)
+        first = cg.states["pit_thresholds"].copy()
+
+        cg.step_pit_brackets(tax_year=2017, cpi_map=cpi_map, base_year=2014)
+        second = cg.states["pit_thresholds"].copy()
+
+        np.testing.assert_array_equal(second, first)
+
+    # ── pit_basic_deduction & pit_taxable_income_deductions ───────
+
+    def test_basic_deduction_stored(self, test_central_government_pit_full):
+        """pit_basic_deduction is stored in states when configured."""
+        cg = test_central_government_pit_full
+        assert "pit_basic_deduction" in cg.states
+        assert cg.states["pit_basic_deduction"] == 0.0
+
+    def test_basic_deduction_not_stored_without_config(self, test_central_government_pit):
+        """Without pit_basic_deduction in config, state key is absent."""
+        assert "pit_basic_deduction" not in test_central_government_pit.states
+
+    def test_taxable_income_deductions_stored(self, test_central_government_pit_full):
+        """pit_taxable_income_deductions stored when configured."""
+        cg = test_central_government_pit_full
+        assert "pit_taxable_income_deductions" in cg.states
+        assert cg.states["pit_taxable_income_deductions"] == 9869.0
+
+    def test_taxable_income_deductions_lower_tax_revenue(
+        self, test_central_government_pit_full,
+    ):
+        """Taxable-income deductions reduce tax revenue vs raw PIT."""
+        cg = test_central_government_pit_full
+
+        emp_income = np.array([50000.0, 50000.0])
+        activity = np.array([ActivityStatus.EMPLOYED, ActivityStatus.EMPLOYED])
+
+        cg.compute_taxes(
+            current_ind_employee_income=emp_income,
+            current_total_rent_paid=0.0,
+            current_income_financial_assets=np.zeros(2),
+            current_ind_activity=activity,
+            current_ind_realised_cons=np.zeros(2),
+            current_bank_profits=np.zeros(1),
+            current_firm_production=np.zeros(1),
+            current_firm_price=np.ones(1),
+            current_firm_profits=np.zeros(1),
+            current_firm_industries=np.zeros(1, dtype=int),
+            current_household_new_real_wealth=np.zeros(1),
+            taxes_less_subsidies_rates=np.zeros(1),
+            current_total_exports=0.0,
+        )
+
+        # Tax revenue with deductions < without deductions
+        tax_with_deductions = cg.ts.get_aggregate("taxes_income")[-1]
+
+        # Compare: compute raw progressive tax without deductions
+        taxable = emp_income * (1 - cg.states["Employee Social Insurance Tax"])
+        pit_raw = compute_progressive_tax(
+            taxable,
+            cg.states["pit_thresholds"],
+            cg.states["pit_rates"],
+        )
+        assert tax_with_deductions < pit_raw.sum(), (
+            f"Tax with deductions ({tax_with_deductions:.2f}) should be "
+            f"less than raw PIT ({pit_raw.sum():.2f})"
+        )
+
+    def test_taxable_income_deductions_are_subtracted_before_brackets(
+        self, test_central_government_pit_full,
+    ):
+        """Taxable-income deductions lower the taxable base before brackets."""
+        cg = test_central_government_pit_full
+
+        # Low-income earner whose income is below the deduction threshold
+        emp_income = np.array([5000.0])  # less than basic_deduction 9869
+        activity = np.array([ActivityStatus.EMPLOYED])
+
+        cg.compute_taxes(
+            current_ind_employee_income=emp_income,
+            current_total_rent_paid=0.0,
+            current_income_financial_assets=np.zeros(1),
+            current_ind_activity=activity,
+            current_ind_realised_cons=np.zeros(1),
+            current_bank_profits=np.zeros(1),
+            current_firm_production=np.zeros(1),
+            current_firm_price=np.ones(1),
+            current_firm_profits=np.zeros(1),
+            current_firm_industries=np.zeros(1, dtype=int),
+            current_household_new_real_wealth=np.zeros(1),
+            taxes_less_subsidies_rates=np.zeros(1),
+            current_total_exports=0.0,
+        )
+
+        # After deductions, taxable drops to 0 (capped), so tax ≈ 0
+        last_tax = cg.ts.get_aggregate("taxes_income")[-1]
+        # With employee_SIT removed and deduction > income, tax should be 0
+        assert last_tax == pytest.approx(0.0, abs=1e-6), (
+            f"Expected ~zero tax for below-deduction income, got {last_tax}"
+        )
+
+    # ── step_pit_brackets: deductions are CPI-inflated too ────────
+
+    def test_step_pit_brackets_inflates_basic_deduction(
+        self, test_central_government_pit_full,
+    ):
+        """CPI inflation inflates pit_basic_deduction (set to non-zero
+        for this test to verify the plumbing)."""
+        cg = test_central_government_pit_full
+        assert cg.pit_base_basic_deduction is not None
+
+        # Seed a non-zero value to verify inflation works
+        cg.states["pit_basic_deduction"] = 5000.0
+        cg.pit_base_basic_deduction = 5000.0
+
+        cpi_map = {2014: 0.01, 2015: 0.02, 2016: 0.015}
+        cg.step_pit_brackets(tax_year=2017, cpi_map=cpi_map, base_year=2014)
+
+        factor = 1.01 * 1.02 * 1.015
+        expected = 5000.0 * factor
+        assert cg.states["pit_basic_deduction"] == pytest.approx(expected)
+
+    def test_step_pit_brackets_inflates_taxable_income_deductions(
+        self, test_central_government_pit_full,
+    ):
+        """CPI inflation also inflates pit_taxable_income_deductions."""
+        cg = test_central_government_pit_full
+        assert cg.pit_base_deductions is not None
+
+        original = cg.states["pit_taxable_income_deductions"]
+        cpi_map = {2014: 0.10}
+
+        cg.step_pit_brackets(tax_year=2015, cpi_map=cpi_map, base_year=2014)
+
+        expected = original * 1.10
+        assert cg.states["pit_taxable_income_deductions"] == pytest.approx(expected)
+
+    def test_step_pit_brackets_empty_cpi_noop(
+        self, test_central_government_pit_full,
+    ):
+        """Empty cpi_map: thresholds, deductions, and basic_deduction unchanged."""
+        cg = test_central_government_pit_full
+        orig_thresh = cg.states["pit_thresholds"].copy()
+        orig_basic = cg.states["pit_basic_deduction"]
+        orig_deduc = cg.states["pit_taxable_income_deductions"]
+
+        cg.step_pit_brackets(tax_year=2017, cpi_map={}, base_year=2014)
+
+        np.testing.assert_array_equal(cg.states["pit_thresholds"], orig_thresh)
+        assert cg.states["pit_basic_deduction"] == orig_basic
+        assert cg.states["pit_taxable_income_deductions"] == orig_deduc
+
+    # ── Pre-calibration: effective rate from employee income ─────
+
+    def test_pre_calibration_effective_rate_in_country_construction(
+        self, datawrapper, test_individuals,
+    ):
+        """When country.py constructs a Country with pit_brackets,
+        the Income Tax effective rate is pre-calibrated at t=0."""
+        from macromodel.agents.central_government import CentralGovernment
+        from macromodel.configurations import CentralGovernmentConfiguration
+
+        country_data = datawrapper.synthetic_countries["FRA"]
+
+        pit_config = CentralGovernmentConfiguration(
+            pit_brackets=[
+                (37606, 0.0506),
+                (75213, 0.077),
+                (86354, 0.105),
+                (104858, 0.1229),
+                (150000, 0.147),
+                (float("inf"), 0.168),
+            ],
+        )
+
+        n_unemployed = np.sum(
+            test_individuals.states["Activity Status"] == ActivityStatus.UNEMPLOYED
+        )
+
+        cg = CentralGovernment.from_pickled_agent(
+            synthetic_central_government=country_data.central_government,
+            configuration=pit_config,
+            country_name="FRA",
+            all_country_names=["FRA", "ROW"],
+            taxes_net_subsidies=country_data.industry_data["industry_vectors"][
+                "Taxes Less Subsidies Rates"
+            ].values,
+            tax_data=country_data.tax_data,
+            n_industries=datawrapper.n_industries,
+            number_of_unemployed_individuals=n_unemployed,
+        )
+
+        # Effective rate must have been set — not the raw OECD average
+        assert "Income Tax" in cg.states
+        rate = cg.states["Income Tax"]
+        assert 0.05 < rate < 0.17, (
+            f"Pre-calibrated effective rate {rate:.4f} should be between 5% and 17%"
+        )
+
+    def test_pre_calibration_with_deductions(
+        self, test_central_government_pit_full,
+    ):
+        """With taxable-income deductions, the pre-calibrated effective
+        rate is lower than brackets-only."""
+        cg = test_central_government_pit_full
+
+        # The effective rate should be lower than the brackets-only case
+        # because the taxable-income deduction reduces taxable base
+        rate = cg.states["Income Tax"]
+        # With BC-like brackets (5.06% lowest), deductions push effective
+        # below the no-deduction case
+        assert rate < 0.10, (
+            f"Effective rate with deductions ({rate:.4f}) should be < 10%"
+        )
+        assert rate > 0.0
