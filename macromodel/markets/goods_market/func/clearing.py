@@ -819,6 +819,8 @@ class WaterBucketGoodsMarketClearer(GoodsMarketClearer):
                 for transactor in goods_market_participants[country_name]:
                     if transactor.transactor_seller_states["Value Type"] == ValueType.REAL:
                         ind = transactor.transactor_seller_states["Industries"] == g
+                        if not np.any(ind):
+                            continue
                         if self.deterministic:
                             _, seller_priorities = get_seller_priorities_deterministic(
                                 productions=transactor.transactor_seller_states["Initial Goods"][ind],

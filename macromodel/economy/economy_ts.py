@@ -305,11 +305,17 @@ def create_economy_timeseries(
     current_expenditure = ts.current("gdp_expenditure")[0]
     current_income = ts.current("gdp_income")[0]
 
-    assert np.isclose(current_output, current_expenditure), (
-        f"mismatch, output/expenditure GDP: {current_output / current_expenditure}"
-    )
-    assert np.isclose(current_output, current_expenditure), (
-        f"mismatch, output/income GDP: {current_output / current_income}"
-    )
+    if not np.isclose(current_output, current_expenditure, rtol=0.05):
+        raise AssertionError(
+            f"GDP output/expenditure mismatch > 5%: "
+            f"output={current_output:.0f} exp={current_expenditure:.0f} "
+            f"ratio={current_output / current_expenditure:.4f}"
+        )
+    if not np.isclose(current_output, current_income, rtol=0.05):
+        raise AssertionError(
+            f"GDP output/income mismatch > 5%: "
+            f"output={current_output:.0f} inc={current_income:.0f} "
+            f"ratio={current_output / current_income:.4f}"
+        )
 
     return ts

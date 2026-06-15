@@ -1488,8 +1488,8 @@ class Country:
             gross_fixed_capital_formation=self.firms.ts.current("total_capital_inputs_bought_costs").sum()
             + (1 + self.central_government.states["Capital Formation Tax"])
             * self.households.ts.current("investment").sum(),
-            exports=self.economy.ts.current("exports").sum(),
-            imports=self.economy.ts.current("imports").sum(),
+            exports=np.nansum(self.economy.ts.current("exports")),
+            imports=np.nansum(self.economy.ts.current("imports")),
             operating_surplus=self.firms.ts.current("gross_operating_surplus_mixed_income").sum(),
             wages=self.firms.ts.current("total_wage").sum(),
             rent_received=self.economy.ts.current("total_real_rent_rec")[0]

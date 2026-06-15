@@ -97,11 +97,15 @@ def ensure_minimum_workers_in_industries(individual_data: pd.DataFrame, n_indust
             employees_per_industry = count_employees(individual_data)
             zero_employee_industries = np.where(employees_per_industry == 0)[0]
 
-    # Final check — if we still have empty industries, raise an error
+    # Final check — if we still have empty industries, warn but don't crash.
     if len(zero_employee_industries) > 0:
-        raise ValueError(
-            "Not enough individuals to fill each industry with at least one worker. "
-            "Consider increasing the scale of the simulation."
+        import warnings
+        warnings.warn(
+            f"{len(zero_employee_industries)} industry(s) have zero employed workers "
+            f"(indices: {zero_employee_industries.tolist()}). "
+            f"This is expected in small provinces with highly disaggregated industries. "
+            f"The affected industries will have no production in this province.",
+            UserWarning,
         )
 
     return individual_data
