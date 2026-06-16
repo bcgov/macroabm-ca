@@ -222,17 +222,17 @@ class TestCentralGovernmentPIT:
 
         np.testing.assert_array_equal(second, first)
 
-    # ── pit_basic_deduction & pit_taxable_income_deductions ───────
+    # ── pit_credit_base & pit_taxable_income_deductions ───────
 
-    def test_basic_deduction_stored(self, test_central_government_pit_full):
-        """pit_basic_deduction is stored in states when configured."""
+    def test_credit_base_stored(self, test_central_government_pit_full):
+        """pit_credit_base is stored in states when configured."""
         cg = test_central_government_pit_full
-        assert "pit_basic_deduction" in cg.states
-        assert cg.states["pit_basic_deduction"] == 0.0
+        assert "pit_credit_base" in cg.states
+        assert cg.states["pit_credit_base"] == 0.0
 
-    def test_basic_deduction_not_stored_without_config(self, test_central_government_pit):
-        """Without pit_basic_deduction in config, state key is absent."""
-        assert "pit_basic_deduction" not in test_central_government_pit.states
+    def test_credit_base_not_stored_without_config(self, test_central_government_pit):
+        """Without pit_credit_base in config, state key is absent."""
+        assert "pit_credit_base" not in test_central_government_pit.states
 
     def test_taxable_income_deductions_stored(self, test_central_government_pit_full):
         """pit_taxable_income_deductions stored when configured."""
@@ -315,24 +315,24 @@ class TestCentralGovernmentPIT:
 
     # ── step_pit_brackets: deductions are CPI-inflated too ────────
 
-    def test_step_pit_brackets_inflates_basic_deduction(
+    def test_step_pit_brackets_inflates_credit_base(
         self, test_central_government_pit_full,
     ):
-        """CPI inflation inflates pit_basic_deduction (set to non-zero
+        """CPI inflation inflates pit_credit_base (set to non-zero
         for this test to verify the plumbing)."""
         cg = test_central_government_pit_full
-        assert cg.pit_base_basic_deduction is not None
+        assert cg.pit_base_credit_base is not None
 
         # Seed a non-zero value to verify inflation works
-        cg.states["pit_basic_deduction"] = 5000.0
-        cg.pit_base_basic_deduction = 5000.0
+        cg.states["pit_credit_base"] = 5000.0
+        cg.pit_base_credit_base = 5000.0
 
         cpi_map = {2014: 0.01, 2015: 0.02, 2016: 0.015}
         cg.step_pit_brackets(tax_year=2017, cpi_map=cpi_map, base_year=2014)
 
         factor = 1.01 * 1.02 * 1.015
         expected = 5000.0 * factor
-        assert cg.states["pit_basic_deduction"] == pytest.approx(expected)
+        assert cg.states["pit_credit_base"] == pytest.approx(expected)
 
     def test_step_pit_brackets_inflates_taxable_income_deductions(
         self, test_central_government_pit_full,
@@ -352,16 +352,16 @@ class TestCentralGovernmentPIT:
     def test_step_pit_brackets_empty_cpi_noop(
         self, test_central_government_pit_full,
     ):
-        """Empty cpi_map: thresholds, deductions, and basic_deduction unchanged."""
+        """Empty cpi_map: thresholds, deductions, and credit_base unchanged."""
         cg = test_central_government_pit_full
         orig_thresh = cg.states["pit_thresholds"].copy()
-        orig_basic = cg.states["pit_basic_deduction"]
+        orig_credit = cg.states["pit_credit_base"]
         orig_deduc = cg.states["pit_taxable_income_deductions"]
 
         cg.step_pit_brackets(tax_year=2017, cpi_map={}, base_year=2014)
 
         np.testing.assert_array_equal(cg.states["pit_thresholds"], orig_thresh)
-        assert cg.states["pit_basic_deduction"] == orig_basic
+        assert cg.states["pit_credit_base"] == orig_credit
         assert cg.states["pit_taxable_income_deductions"] == orig_deduc
 
     # ── Pre-calibration: effective rate from employee income ─────

@@ -232,7 +232,7 @@ def test_central_government_pit_full(datawrapper, test_individuals):
             (150000, 0.147),
             (float("inf"), 0.168),
         ],
-        pit_basic_deduction=0.0,
+        pit_credit_base=0.0,
         pit_taxable_income_deductions=9869.0,
     )
 

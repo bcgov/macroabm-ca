@@ -91,8 +91,8 @@ class CentralGovernment(Agent):
         else:
             self.pit_base_thresholds = None
 
-        # Snapshot base basic_deduction for CPI inflation indexing.
-        self.pit_base_basic_deduction: Optional[float] = states.get("pit_basic_deduction")
+        # Snapshot base credit_base for CPI inflation indexing.
+        self.pit_base_credit_base: Optional[float] = states.get("pit_credit_base")
 
         # Snapshot base taxable-income deduction for CPI inflation indexing.
         self.pit_base_deductions: Optional[float] = states.get("pit_taxable_income_deductions")
@@ -151,8 +151,8 @@ class CentralGovernment(Agent):
             brackets = np.array(configuration.pit_brackets, dtype=float)
             states["pit_thresholds"] = brackets[:, 0]
             states["pit_rates"] = brackets[:, 1]
-            if configuration.pit_basic_deduction is not None:
-                states["pit_basic_deduction"] = configuration.pit_basic_deduction
+            if configuration.pit_credit_base is not None:
+                states["pit_credit_base"] = configuration.pit_credit_base
             if configuration.pit_taxable_income_deductions is not None:
                 states["pit_taxable_income_deductions"] = configuration.pit_taxable_income_deductions
 
@@ -385,11 +385,11 @@ class CentralGovernment(Agent):
                 taxable_income_for_brackets, pit_thresholds, pit_rates
             )
 
-            # Apply non-refundable basic personal amount credit when configured.
-            # Credit = basic_deduction × lowest_marginal_rate, capped so tax ≥ 0.
-            pit_basic_deduction = self.states.get("pit_basic_deduction")
-            if pit_basic_deduction is not None and pit_basic_deduction > 0:
-                credit = pit_basic_deduction * float(pit_rates[0])
+            # Apply non-refundable tax credits when configured.
+            # Credit = credit_base × lowest_marginal_rate, capped so tax ≥ 0.
+            pit_credit_base = self.states.get("pit_credit_base")
+            if pit_credit_base is not None and pit_credit_base > 0:
+                credit = pit_credit_base * float(pit_rates[0])
                 pit_per_individual = np.maximum(0.0, pit_per_individual - credit)
 
             total_income_tax = pit_per_individual.sum()
@@ -447,11 +447,11 @@ class CentralGovernment(Agent):
         cpi_map: dict[int, float],
         base_year: int,
     ) -> None:
-        """Inflate PIT thresholds, basic deduction, and taxable-income
+        """Inflate PIT thresholds, credit base, and taxable-income
         deductions with compound CPI.
 
         Recomputes ``states["pit_thresholds"]``,
-        ``states["pit_basic_deduction"]``, and
+        ``states["pit_credit_base"]``, and
         ``states["pit_taxable_income_deductions"]`` by compounding annual
         CPI inflation rates.  The nominal values stored at construction
         are never modified — inflation is always computed from those
@@ -478,8 +478,8 @@ class CentralGovernment(Agent):
 
         self.states["pit_thresholds"] = self.pit_base_thresholds * factor
 
-        if self.pit_base_basic_deduction is not None:
-            self.states["pit_basic_deduction"] = self.pit_base_basic_deduction * factor
+        if self.pit_base_credit_base is not None:
+            self.states["pit_credit_base"] = self.pit_base_credit_base * factor
 
         if self.pit_base_deductions is not None:
             self.states["pit_taxable_income_deductions"] = self.pit_base_deductions * factor

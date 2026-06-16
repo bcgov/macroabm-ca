@@ -131,7 +131,7 @@ def run_simulation(country: str, args) -> tuple[Simulation, list[float]]:
         thr, r, _, _ = sch.get_brackets(tax_year=sch.base_year)
         cc.central_government = CentralGovernmentConfiguration(
             pit_brackets=[(float(thr[i]), float(r[i])) for i in range(len(thr))],
-            pit_basic_deduction=sch.basic_deduction,
+            pit_credit_base=sch.basic_deduction,
             functions=cc.central_government.functions,
         )
         if sch.basic_deduction is not None:

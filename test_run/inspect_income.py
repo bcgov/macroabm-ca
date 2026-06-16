@@ -61,7 +61,7 @@ if COUNTRY != HDF5_GROUP:
 
 
 # ── Load PIT schedule (if applicable) ───────────────────────────────
-pit_thresholds = pit_rates = pit_lower = pit_quick = pit_basic_deduction = None
+pit_thresholds = pit_rates = pit_lower = pit_quick = pit_credit_base = None
 pit_label = ""
 if pit_csv_arg:
     from macro_data.readers.taxation.personal_income_tax.pit_schedule import PITSchedule
@@ -73,10 +73,10 @@ if pit_csv_arg:
     pit_thresholds, pit_rates, pit_lower, pit_quick = schedule.get_brackets(
         tax_year=schedule.base_year
     )
-    pit_basic_deduction = schedule.basic_deduction
+    pit_credit_base = schedule.basic_deduction
     pit_label = f" | PIT: {pit_csv_arg} ({schedule.base_year})"
-    if pit_basic_deduction is not None:
-        pit_label += f" | bpa=${pit_basic_deduction:,.0f}"
+    if pit_credit_base is not None:
+        pit_label += f" | credit_base=${pit_credit_base:,.0f}"
     print(f"PIT schedule loaded: {len(pit_thresholds)} brackets from {pit_csv_arg}")
 
 
@@ -121,12 +121,14 @@ with h5py.File(H5_PATH, "r") as f:
     if pit_thresholds is not None:
         from macro_data.readers.taxation.personal_income_tax.pit_schedule import compute_progressive_tax
 
-        # Taxable base = employee income, with BPA deducted before brackets
+        # Taxable base = employee income, brackets applied first.
+        # BPA is a non-refundable credit applied *after* bracket calculation.
         taxable = ind_emp_income.copy()
-        if pit_basic_deduction is not None and pit_basic_deduction > 0:
-            taxable = np.maximum(0.0, taxable - pit_basic_deduction)
-
         pit_tax = compute_progressive_tax(taxable, pit_thresholds, pit_rates)
+
+        if pit_credit_base is not None and pit_credit_base > 0:
+            credit = pit_credit_base * pit_rates[0]
+            pit_tax = np.maximum(0.0, pit_tax - credit)
 
         total_tax = pit_tax.sum()
         total_emp = ind_emp_income.sum()
@@ -134,10 +136,11 @@ with h5py.File(H5_PATH, "r") as f:
         eff_rate = total_tax / total_emp if total_emp > 0 else 0.0
 
         print(f"\n===== PERSONAL INCOME TAX (initial state) =====")
-        if pit_basic_deduction is not None:
-            print(f"  Basic personal amount (deduction):  ${pit_basic_deduction:,.0f}")
+        if pit_credit_base is not None:
+            credit = pit_credit_base * pit_rates[0]
+            print(f"  Tax credit base (post-bracket):     ${pit_credit_base:,.0f} (max credit ${credit:,.0f})")
         print(f"  Total employee income:              {total_emp:,.6f}")
-        print(f"  Total taxable income (after BPA):   {total_taxable:,.6f}")
+        print(f"  Total taxable income (gross):       {total_taxable:,.6f}")
         print(f"  Total PIT revenue:                  {total_tax:,.6f}")
         print(f"  Effective rate (on gross emp inc):  {eff_rate:.4%}")
         print(f"  Mean tax per agent:                 {pit_tax.mean():,.6f}")

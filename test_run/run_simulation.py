@@ -205,11 +205,12 @@ def main():
         brackets = [(float(thresholds[i]), float(rates[i])) for i in range(len(thresholds))]
         country_config.central_government = CentralGovernmentConfiguration(
             pit_brackets=brackets,
-            pit_taxable_income_deductions=schedule.basic_deduction,
+            pit_credit_base=schedule.basic_deduction,
             functions=country_config.central_government.functions,
         )
         if schedule.basic_deduction is not None:
-            print(f"  Basic personal amount (deduction from taxable income): ${schedule.basic_deduction:,.0f}")
+            credit = schedule.basic_deduction * float(rates[0])
+            print(f"  Basic personal amount (post-bracket credit): ${schedule.basic_deduction:,.0f} (credit ${credit:,.0f})")
         print(f"  Progressive PIT: {len(brackets)} brackets")
         for i, (thresh, rate) in enumerate(brackets):
             print(f"    Bracket {i+1}: up to {thresh:>12,.0f} @ {rate:.1%}")

@@ -370,10 +370,10 @@ class Country:
 
             pit_per_ind = compute_progressive_tax(taxable_for_brackets, pit_thresholds, pit_rates)
 
-            # Apply non-refundable basic personal amount credit when configured.
-            pit_basic_deduction = central_government.states.get("pit_basic_deduction")
-            if pit_basic_deduction is not None and pit_basic_deduction > 0:
-                credit = pit_basic_deduction * float(pit_rates[0])
+            # Apply non-refundable tax credits when configured.
+            pit_credit_base = central_government.states.get("pit_credit_base")
+            if pit_credit_base is not None and pit_credit_base > 0:
+                credit = pit_credit_base * float(pit_rates[0])
                 pit_per_ind = np.maximum(0.0, pit_per_ind - credit)
 
             total_base = initial_taxable.sum()

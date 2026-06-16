@@ -40,24 +40,24 @@ class CentralGovernmentConfiguration(BaseModel):
         "None means use the flat Income Tax rate.",
     )
 
-    # Basic personal amount for non-refundable tax credit.
-    # The credit is basic_deduction × lowest_marginal_rate, subtracted
-    # after the progressive calculation.  Inflated alongside brackets
-    # when CPI-indexing is active.  None means no credit applied.
+    # Pool of non-refundable tax credit bases (post-bracket).
+    # Each credit = base × lowest_marginal_rate, subtracted after the
+    # progressive bracket calculation.  The field holds the sum of all
+    # credit bases (e.g., BPA + charitable donation + tuition).
+    # Inflated alongside brackets when CPI-indexing is active.
+    # None means no post-bracket credits are applied.
     #
-    # NOTE: In BC's real tax system the Basic Personal Amount (BPA) is
-    # a deduction from taxable income, NOT a post-bracket credit.
-    # Use ``pit_taxable_income_deductions`` for the BPA.  Use this
-    # field for credits that genuinely apply after brackets (e.g.
-    # charitable donation credit, tuition credit).
-    pit_basic_deduction: Optional[float] = Field(
+    # Use ``pit_taxable_income_deductions`` for deductions that should
+    # reduce taxable income *before* brackets (e.g., employment expenses,
+    # pension contributions).
+    pit_credit_base: Optional[float] = Field(
         default=None,
-        description="Non-refundable tax credit base (post-bracket). NOT the BPA.",
+        description="Sum of non-refundable tax credit bases (post-bracket).",
     )
 
     # Per-individual deduction(s) subtracted from the combined taxable
     # base (employee + rental + financial income) *before* the
-    # progressive bracket calculation.  Unlike ``pit_basic_deduction``
+    # progressive bracket calculation.  Unlike ``pit_credit_base``
     # (a non-refundable credit), these deductions lower the bracket a
     # filer falls into and are therefore more powerful.
     #
