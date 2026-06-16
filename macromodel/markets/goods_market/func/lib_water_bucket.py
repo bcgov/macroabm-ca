@@ -127,7 +127,12 @@ def get_trade_proportions(
 
     # Normalize origin proportions for each destination
     for c2 in range(n_countries):
-        origin_trade_proportions[:, c2] /= np.sum(origin_trade_proportions[:, c2], axis=0)
+        denom = np.sum(origin_trade_proportions[:, c2], axis=0)
+        for g in range(origin_trade_proportions.shape[2]):
+            if denom[g] != 0.0:
+                origin_trade_proportions[:, c2, g] /= denom[g]
+            else:
+                origin_trade_proportions[:, c2, g] = 0.0
 
     # Handle destination trade proportions
     destin_trade_proportions = default_destin_trade_proportions.copy()
@@ -138,7 +143,12 @@ def get_trade_proportions(
 
     # Normalize destination proportions for each origin
     for c1 in range(n_countries):
-        destin_trade_proportions[c1] /= np.sum(destin_trade_proportions[c1], axis=0)
+        denom = np.sum(destin_trade_proportions[c1], axis=0)
+        for g in range(destin_trade_proportions.shape[2]):
+            if denom[g] != 0.0:
+                destin_trade_proportions[c1, :, g] /= denom[g]
+            else:
+                destin_trade_proportions[c1, :, g] = 0.0
 
     return origin_trade_proportions, destin_trade_proportions
 

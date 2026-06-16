@@ -17,6 +17,7 @@ Key features:
 - Country-specific data processing
 """
 
+import re
 import warnings
 from dataclasses import dataclass
 from datetime import date
@@ -328,6 +329,15 @@ class DataReaders:
             df = pd.read_csv(disagg_path, header=[0, 1], index_col=[0, 1])
 
             df *= 1e6  # Scale to millions
+
+            column_industries = df.columns.get_level_values(1).unique().tolist()
+            row_industries = set(df.index.get_level_values(1).unique())
+            shared_labels = [industry for industry in column_industries if industry in row_industries]
+            industry_pattern = re.compile(r"^[A-Z](?:\d{2}(?:T\d{2})?)?[a-z]?(?:_[A-Z])?$")
+            industries = [industry for industry in shared_labels if industry_pattern.match(industry)]
+            if not industries:
+                raise ValueError("Provincial ICIO data has no matching industries.")
+            icio[simulation_year].industries = industries
 
             all_provinces = []
             for key, value in regions_dict.items():

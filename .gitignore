@@ -160,3 +160,6 @@ debugging_experiments/
 dev/
 inet-macro-dev/
 macro-dev/
+
+# Local validation outputs from ad hoc model runs
+local_validation/

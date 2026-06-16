@@ -9,6 +9,8 @@ from macro_data.configuration.countries import Country
 from macro_data.configuration.region import Region
 from macro_data.readers.economic_data.exchange_rates import ExchangeRatesReader
 from macro_data.readers.io_tables.mappings import WIOD_AGGREGATE, WIOD_ALL
+from macro_data.readers.io_tables.sector_contracts import bridge_sea_to_io_industries
+from macro_data.readers.socioeconomic_data.sea_io_reconciliation import reconcile_provincial_sea_to_io
 from macro_data.readers.util.prune_util import prune_index
 
 
@@ -100,22 +102,12 @@ class WIODSEAReader:
         # Cosmetics
         sea = sea.loc[sea.index.get_level_values(0).isin(country_names)]
 
-        sea_industries = sea.index.get_level_values(1).unique()
-        not_present_industries = [industry for industry in sea_industries if industry not in industries]
-
-        industry_to_fix = [
-            any([ind.startswith(sea_ind[0]) for ind in industries]) for sea_ind in not_present_industries
-        ]
-
-        for sea_industry, should_fix in zip(not_present_industries, industry_to_fix):
-            sub_industries = [ind for ind in industries if ind.startswith(sea_industry[0])]
-            for country in country_names:
-                factors = value_added_dict[country].loc[sub_industries].to_numpy(copy=True)
-                factors /= factors.sum()
-                for sub_industry, factor in zip(sub_industries, factors):
-                    sea.loc[(country, sub_industry), :] = sea.loc[(country, sea_industry), :] * factor
-
-        sea = sea.loc[sea.index.get_level_values(1).isin(industries)]
+        sea = bridge_sea_to_io_industries(
+            sea=sea,
+            industries=industries,
+            value_added_dict=value_added_dict,
+            country_names=country_names,
+        )
 
         sea.index.names = ["Country", "Industry"]
         sea.columns.name = "Field"
@@ -150,6 +142,12 @@ class WIODSEAReader:
                     new = new.fillna(0)
                     sea = pd.concat([sea, new])
                 sea.drop(country, inplace=True)
+
+        sea = reconcile_provincial_sea_to_io(
+            sea=sea,
+            value_added_dict=value_added_dict,
+            regions_dict=regions_dict,
+        )
 
         sea = sea.fillna(0)
 
@@ -190,11 +188,7 @@ class WIODSEAReader:
             field (str): The name of the field.
             values (np.ndarray): An array of values in USD.
         """
-        # Use proper indexing to avoid chained assignment warning
-        mask = (self.df.index.get_level_values(0) == country) & (
-            self.df.index.get_level_values(1).isin(self.industries)
-        )
-        self.df.loc[mask, field] = values
+        self.df.loc[pd.IndexSlice[country, self.industries], field] = values
 
     #
     # def get_values_in_lcu(self, country: str, field: str) -> np.ndarray:

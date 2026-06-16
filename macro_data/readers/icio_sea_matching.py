@@ -8,6 +8,7 @@ from macro_data.configuration.countries import Country
 from macro_data.configuration.region import Region
 from macro_data.readers.economic_data.eurostat_reader import EuroStatReader
 from macro_data.readers.io_tables.icio_reader import ICIOReader
+from macro_data.readers.socioeconomic_data.sea_io_reconciliation import get_capital_allocation_eligibility
 from macro_data.readers.socioeconomic_data.wiod_sea_data import WIODSEAReader
 
 
@@ -55,8 +56,19 @@ def _add_country_investment(
     cap_factors = sea_reader.get_values_in_usd(country_name, "Capital Compensation") / gfcf
     value_added = icio_reader.get_value_added(country_name) * yearly_factor
 
+    # Use the upstream SEA/IO reconciliation contract to prevent investment mass
+    # from being reintroduced into province-sector cells marked inactive.
+    active_va_mask = get_capital_allocation_eligibility(
+        sea_reader.df,
+        country_name,
+        icio_reader.industries,
+    )
+
     # replace nans with 0
     cap_factors = np.where(np.isnan(cap_factors), 0, cap_factors)
+    cap_factors = np.where(active_va_mask, cap_factors, 0.0)
+    if cap_factors.sum() == 0:
+        cap_factors = np.where(active_va_mask, 1.0, 0.0)
     cap_factors /= cap_factors.sum()  # normalise to 1
 
     violated_constraint = cap_factors >= icio_reader.get_value_added(country_name) / gfcf.sum()
@@ -70,6 +82,10 @@ def _add_country_investment(
             g=gfcf,
             gamma=max_capital_ratio,
         )
+        cap_factors = np.where(active_va_mask, cap_factors, 0.0)
+        if cap_factors.sum() == 0:
+            cap_factors = np.where(active_va_mask, 1.0, 0.0)
+        cap_factors /= cap_factors.sum()
     #     cap_factors[violated_constraint] = (
     #         0.5 * np.mean(cap_factors[~violated_constraint])
     #         + 0.5 * sea_reader.get_values_in_usd(country_name, "Value Added")[violated_constraint] / gfcf.sum()

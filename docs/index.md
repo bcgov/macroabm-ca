@@ -46,6 +46,7 @@ The calibration package that provides:
 - [Installation Guide](getting_started/installation.md)
 - [Quick Start Tutorial](getting_started/quickstart.md)
 - [Basic Usage Examples](examples/basic_usage.md)
+- [Canada Provincial IO Development Note](canada_provincial_io_development.md)
 
 ## Documentation Structure
 
