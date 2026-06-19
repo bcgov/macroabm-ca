@@ -57,6 +57,40 @@ from macromodel.markets.housing_market.housing_market import HousingMarket
 from macromodel.markets.labour_market.labour_market import LabourMarket
 from macromodel.rest_of_the_world import RestOfTheWorld
 from macromodel.util.get_histogram import get_histogram
+from macro_data.readers.taxation.personal_income_tax.pit_schedule import compute_progressive_tax
+
+
+def _compute_children_per_individual(
+    individual_ages: np.ndarray,
+    corr_households: np.ndarray,
+    age_cutoff: int,
+) -> np.ndarray:
+    """Count children below *age_cutoff* in each individual's household.
+
+    Each **adult** in a household reports the same child count (the
+    household's total children below the cutoff).  Children themselves
+    report 0 (they are not adding credit bases for themselves).
+
+    Args:
+        individual_ages: Shape (n_ind,).  Age of every individual.
+        corr_households: Shape (n_ind,).  Household ID per individual.
+        age_cutoff: Strict upper age bound (e.g. 18 or 6).
+
+    Returns:
+        Shape (n_ind,).  Number of children below *age_cutoff* in the
+        individual's household.  Zero for individuals below the cutoff
+        themselves.
+    """
+    n_ind = len(individual_ages)
+    children_per_hh = np.bincount(
+        corr_households.astype(int),
+        weights=(individual_ages < age_cutoff).astype(float),
+        minlength=corr_households.max() + 1,
+    )
+    result = children_per_hh[corr_households.astype(int)]
+    # Children themselves don't claim the credit
+    result[individual_ages < age_cutoff] = 0
+    return result
 
 
 class Country:
@@ -319,6 +353,18 @@ class Country:
 
         n_unemployed = (individuals.states["Activity Status"] == ActivityStatus.UNEMPLOYED).sum()
 
+        # Scale PIT bracket thresholds to agent-level income units.
+        # Each synthetic agent represents *scale* real people, so a
+        # $50k bracket for individuals becomes $50k × scale for agents.
+        if (
+            country_configuration.central_government.pit_brackets is not None
+            and scale > 1
+        ):
+            country_configuration.central_government.pit_brackets = [
+                (threshold * scale, rate)
+                for threshold, rate in country_configuration.central_government.pit_brackets
+            ]
+
         central_government = CentralGovernment.from_pickled_agent(
             synthetic_central_government=synthetic_country.central_government,
             configuration=country_configuration.central_government,
@@ -329,6 +375,140 @@ class Country:
             tax_data=synthetic_country.tax_data,
             n_industries=n_industries,
         )
+
+        # --- Progressive PIT: pre-calibrate the effective rate ---
+        # When a progressive schedule is configured, compute the
+        # implied effective tax rate on the synthetic employee income
+        # distribution and overwrite states["Income Tax"].  This ensures
+        # that the very first period's wage-setting, after-tax income,
+        # and rental income calculations use the schedule-consistent
+        # rate rather than the raw OECD average — eliminating a
+        # calibration shock at t=0.
+        pit_thresholds = central_government.states.get("pit_thresholds")
+        pit_rates = central_government.states.get("pit_rates")
+        if pit_thresholds is not None and pit_rates is not None:
+            initial_taxable = individuals.states["Employee Income"] * (
+                1 - central_government.states["Employee Social Insurance Tax"]
+            )
+
+            # Apply per-individual taxable-income deductions when configured.
+            pit_taxable_income_deductions = central_government.states.get(
+                "pit_taxable_income_deductions"
+            )
+            taxable_for_brackets = initial_taxable
+            if pit_taxable_income_deductions is not None and pit_taxable_income_deductions > 0:
+                taxable_for_brackets = np.maximum(
+                    0.0, initial_taxable - pit_taxable_income_deductions
+                )
+
+            pit_per_ind = compute_progressive_tax(taxable_for_brackets, pit_thresholds, pit_rates)
+
+            # Apply non-refundable tax credits when configured.
+            pit_tax_credits = central_government.states.get("pit_tax_credits")
+            ind_ages = individuals.states.get("Age")
+            ind_corr_hh = individuals.states.get("Corresponding Household ID")
+            hh_type = households.states.get("Type")
+            hh_n_adults = households.states.get("Number of Adults")
+
+            if pit_tax_credits is not None and len(pit_tax_credits) > 0:
+                n_indiv = len(pit_per_ind)
+
+                # ── build household-context arrays ──
+                from macromodel.agents.households.household_properties import HouseholdType as HT
+
+                couple_types = {
+                    HT.TWO_ADULTS_YOUNGER_THAN_65,
+                    HT.TWO_ADULTS_ONE_AT_LEAST_65,
+                    HT.TWO_ADULTS_WITH_ONE_CHILD,
+                    HT.TWO_ADULTS_WITH_TWO_CHILDREN,
+                    HT.TWO_ADULTS_WITH_AT_LEAST_THREE_CHILDREN,
+                }
+                single_parent_types = {HT.SINGLE_PARENT_WITH_CHILDREN}
+
+                hh_of_ind = np.array(ind_corr_hh).astype(int) if ind_corr_hh is not None else None
+                in_couple = None
+                is_sp = None
+                spouse_income = None
+
+                if hh_of_ind is not None and hh_type is not None and hh_n_adults is not None:
+                    hh_type_of_ind = np.array([
+                        hh_type[h] if h < len(hh_type) else None for h in hh_of_ind
+                    ])
+                    in_couple = np.array([t in couple_types for t in hh_type_of_ind])
+                    is_sp = np.array([t in single_parent_types for t in hh_type_of_ind])
+
+                    spouse_income = np.full(n_indiv, np.inf)
+                    for hh_id in np.unique(hh_of_ind):
+                        hh_mask = hh_of_ind == hh_id
+                        hh_inds = np.where(hh_mask)[0]
+                        if len(hh_inds) == 2 and hh_id < len(hh_type):
+                            if hh_type[hh_id] in couple_types:
+                                spouse_income[hh_inds[0]] = initial_taxable[hh_inds[1]]
+                                spouse_income[hh_inds[1]] = initial_taxable[hh_inds[0]]
+
+                per_ind_credit_base = np.zeros(n_indiv)
+
+                # ── child counts per individual ──
+                children_under_18 = None
+                children_under_6 = None
+                if ind_corr_hh is not None and ind_ages is not None:
+                    children_under_18 = _compute_children_per_individual(
+                        ind_ages, ind_corr_hh, 18,
+                    )
+                    children_under_6 = _compute_children_per_individual(
+                        ind_ages, ind_corr_hh, 6,
+                    )
+
+                for tc in pit_tax_credits:
+                    kind = tc["kind"]
+                    amount = tc["amount"]
+                    age_min = tc.get("age_min")
+
+                    if age_min is not None and ind_ages is not None:
+                        eligible = ind_ages >= age_min
+                    elif kind == "Spousal Amount" and in_couple is not None:
+                        eligible = in_couple.copy()
+                    elif kind == "Equivalent To Spouse Amount" and is_sp is not None:
+                        eligible = is_sp.copy()
+                    elif kind.startswith("Child Amount"):
+                        eligible = np.ones(n_indiv, dtype=bool)
+                    else:
+                        eligible = np.ones(n_indiv, dtype=bool)
+
+                    credit_amt = np.where(eligible, amount, 0.0)
+
+                    # ── per-child multiplier ──
+                    if kind == "Child Amount Under 18" and children_under_18 is not None:
+                        credit_amt = amount * children_under_18
+                    elif kind == "Child Amount Under 6" and children_under_6 is not None:
+                        credit_amt = amount * children_under_6
+
+                    # ── Age Amount phaseout ──
+                    # Formula: credit = max(0, amount − rate × max(0, own_income − clawback_start))
+                    # where rate = amount / (cap − clawback_start), derived from the CSV data.
+                    if kind == "Age Amount":
+                        cs = tc.get("clawback_start")
+                        cc = tc.get("clawback_cap")
+                        if cs is not None and cc is not None and cc > cs:
+                            clawback_rate = amount / (cc - cs)
+                            excess = np.maximum(0.0, initial_taxable - cs)
+                            credit_amt = np.maximum(0.0, amount - clawback_rate * excess)
+
+                    # ── spousal / eligible-dependant income test ──
+                    # Real BC formula: credit = max(0, base_amount − other_income)
+                    if kind == "Spousal Amount" and spouse_income is not None:
+                        credit_amt = np.maximum(0.0, amount - spouse_income)
+                    elif kind == "Equivalent To Spouse Amount":
+                        # Dependent has no income in the model → full base
+                        credit_amt = np.where(eligible, amount, 0.0)
+
+                    per_ind_credit_base += credit_amt
+                credit_per_ind = per_ind_credit_base * float(pit_rates[0])
+                pit_per_ind = np.maximum(0.0, pit_per_ind - credit_per_ind)
+
+            total_base = initial_taxable.sum()
+            if total_base > 0:
+                central_government.states["Income Tax"] = float(pit_per_ind.sum() / total_base)
 
         government_entities = GovernmentEntities.from_pickled_agent(
             synthetic_government_entities=synthetic_country.government_entities,
@@ -1358,13 +1538,28 @@ class Country:
         self.economy.ts.bank_insolvency_rate.append([self.banks.compute_insolvency_rate()])
 
         # G5. GOVERNMENT REVENUE
-        # General government fields
+        # Distribute household-level rental and financial income to individuals
+        # for progressive personal income tax calculation.
+        rental_income_per_individual = self.households.distribute_rental_income_to_individuals(
+            housing_data=self.housing_market.states["properties"],
+            corr_households=self.individuals.states["Corresponding Household ID"],
+            individual_employee_income=self.individuals.ts.current("employee_income"),
+            couple_rental_income_split=self.central_government.states["couple_rental_income_split"],
+        )
+        financial_income_per_individual = self.households.distribute_financial_income_to_individuals(
+            household_financial_income=self.households.ts.current("income_financial_assets"),
+            corr_households=self.individuals.states["Corresponding Household ID"],
+            n_individuals=len(self.individuals.states["Corresponding Household ID"]),
+        )
+
         self.central_government.compute_taxes(
             current_ind_employee_income=self.individuals.ts.current("employee_income"),
             current_total_rent_paid=self.households.ts.current("rent")[
                 self.households.states["Tenure Status of the Main Residence"] == 3
             ].sum(),
             current_income_financial_assets=self.households.ts.current("income_financial_assets"),
+            current_ind_rental_income=rental_income_per_individual,
+            current_ind_financial_income=financial_income_per_individual,
             current_ind_activity=self.individuals.states["Activity Status"],
             current_ind_realised_cons=self.households.ts.current("consumption"),
             current_bank_profits=self.banks.ts.current("profits"),
@@ -1375,6 +1570,20 @@ class Country:
             taxes_less_subsidies_rates=self.central_government.states["Taxes Less Subsidies Rates"],
             current_household_new_real_wealth=self.households.ts.current("investment"),
             current_total_exports=self.economy.ts.current("exports_before_taxes").sum(),
+            individuals_age=self.individuals.states.get("Age"),
+            individuals_corr_households=self.individuals.states.get("Corresponding Household ID"),
+            households_type=self.households.states.get("Type"),
+            households_n_adults=self.households.states.get("Number of Adults"),
+            children_under_18_per_ind=_compute_children_per_individual(
+                self.individuals.states.get("Age"),
+                self.individuals.states["Corresponding Household ID"],
+                18,
+            ),
+            children_under_6_per_ind=_compute_children_per_individual(
+                self.individuals.states.get("Age"),
+                self.individuals.states["Corresponding Household ID"],
+                6,
+            ),
         )
 
         # General government fields
@@ -1423,8 +1632,8 @@ class Country:
             gross_fixed_capital_formation=self.firms.ts.current("total_capital_inputs_bought_costs").sum()
             + (1 + self.central_government.states["Capital Formation Tax"])
             * self.households.ts.current("investment").sum(),
-            exports=self.economy.ts.current("exports").sum(),
-            imports=self.economy.ts.current("imports").sum(),
+            exports=np.nansum(self.economy.ts.current("exports")),
+            imports=np.nansum(self.economy.ts.current("imports")),
             operating_surplus=self.firms.ts.current("gross_operating_surplus_mixed_income").sum(),
             wages=self.firms.ts.current("total_wage").sum(),
             rent_received=self.economy.ts.current("total_real_rent_rec")[0]
