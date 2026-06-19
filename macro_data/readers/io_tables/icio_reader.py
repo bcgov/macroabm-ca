@@ -833,9 +833,13 @@ class ICIOReader:
                 if start_country == end_country == "ROW":
                     trade_proportions["value"] += list(np.zeros(len(self.industries)))
                 else:
-                    trade_proportions["value"] += list(
-                        (self.get_trade(start_country, end_country) / imports_total).values
+                    shares = np.divide(
+                        self.get_trade(start_country, end_country).values,
+                        imports_total.values,
+                        out=np.zeros(len(self.industries), dtype=float),
+                        where=imports_total.values != 0.0,
                     )
+                    trade_proportions["value"] += list(shares)
         return pd.DataFrame(trade_proportions).set_index(["start_country", "end_country", "industry"]).sort_index()
 
     def get_destination_trade_proportions(self) -> pd.DataFrame:
@@ -863,9 +867,13 @@ class ICIOReader:
                 if start_country == end_country == "ROW":
                     trade_proportions["value"] += list(np.zeros(len(self.industries)))
                 else:
-                    trade_proportions["value"] += list(
-                        (self.get_trade(start_country, end_country) / exports_total).values
+                    shares = np.divide(
+                        self.get_trade(start_country, end_country).values,
+                        exports_total.values,
+                        out=np.zeros(len(self.industries), dtype=float),
+                        where=exports_total.values != 0.0,
                     )
+                    trade_proportions["value"] += list(shares)
                 trade_proportions["start_country"] += [start_country] * len(self.industries)
                 trade_proportions["end_country"] += [end_country] * len(self.industries)
                 trade_proportions["industry"] += list(range(len(self.industries)))

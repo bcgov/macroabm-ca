@@ -329,7 +329,7 @@ class HFCSReader:
         - Only variables in var_mapping are kept
         """
         # Load data
-        df = pd.read_csv(path, encoding="unicode_escape", engine="pyarrow")
+        df = pd.read_csv(path, encoding="unicode_escape").astype(object)
 
         # Filter for country and keep only mapped variables
         df = df[df["SA0100"] == country_name_short]
@@ -339,9 +339,13 @@ class HFCSReader:
 
         # Convert monetary values to local currency
         var_numerical_union = [v for v in var_numerical if v in df.columns]
-        df.loc[:, var_numerical_union] = df.loc[:, var_numerical_union].replace(["A", "M"], np.nan).astype(float)
-        df.loc[:, var_numerical_union] = exchange_rates.from_eur_to_lcu(
+        monetary_values = df.loc[:, var_numerical_union].replace(["A", "M"], np.nan).apply(
+            pd.to_numeric, errors="coerce"
+        )
+        monetary_values *= exchange_rates.from_eur_to_lcu(
             country=country_name,
             year=year,
-        ) * df.loc[:, var_numerical_union].apply(pd.to_numeric, errors="coerce")
+        )
+        for column in var_numerical_union:
+            df[column] = monetary_values[column].to_numpy()
         return df
