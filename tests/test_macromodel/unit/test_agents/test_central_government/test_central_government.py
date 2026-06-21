@@ -304,6 +304,39 @@ class TestCentralGovernmentPIT:
         last_tax = cg.ts.get_aggregate("taxes_income")[-1]
         assert last_tax == pytest.approx(0.0, abs=1e-6)
 
+    def test_compute_pit_deductions_lower_bracket_base(self, test_central_government_pit):
+        """Taxable-income deductions reduce the base *before* the brackets,
+        so compute_pit taxes (income - deduction)."""
+        cg = test_central_government_pit
+        taxable = np.array([40000.0])
+
+        pit_no_deduction = cg.compute_pit(taxable.copy())
+
+        cg.states["pit_taxable_income_deductions"] = 5000.0
+        pit_with_deduction = cg.compute_pit(taxable.copy())
+
+        assert pit_with_deduction < pit_no_deduction
+        expected = compute_progressive_tax(
+            np.array([35000.0]),
+            cg.states["pit_thresholds"],
+            cg.states["pit_rates"],
+        ).sum()
+        assert pit_with_deduction == pytest.approx(expected)
+
+    def test_compute_pit_credit_floored_at_zero(self, test_central_government_pit):
+        """compute_pit never returns negative tax: a credit larger than the
+        gross tax is clamped, not refunded."""
+        cg = test_central_government_pit
+        taxable = np.array([20000.0])
+        gross = compute_progressive_tax(
+            taxable, cg.states["pit_thresholds"], cg.states["pit_rates"],
+        ).sum()
+
+        # Credit base whose value (x bottom rate) exceeds the gross tax.
+        huge_credit_base = np.array([gross / float(cg.states["pit_rates"][0]) + 1000.0])
+        total = cg.compute_pit(taxable, huge_credit_base)
+        assert total == pytest.approx(0.0)
+
     def test_no_credits_noop(self, test_central_government_pit):
         """Without pit_tax_credits, gross tax = net tax (no credits)."""
         cg = test_central_government_pit

@@ -24,6 +24,11 @@ from macromodel.agents.agent import Agent
 from macromodel.agents.central_government.central_government_ts import (
     create_central_government_timeseries,
 )
+from macromodel.agents.central_government.pit_pools import (
+    PitContext,
+    build_credit_base_pool,
+    build_taxable_income_pool,
+)
 from macromodel.agents.individuals.individual_properties import ActivityStatus
 from macromodel.configurations import CentralGovernmentConfiguration
 from macromodel.timeseries import TimeSeries
@@ -302,6 +307,8 @@ class CentralGovernment(Agent):
         households_n_adults: np.ndarray | None = None,
         children_under_18_per_ind: np.ndarray | None = None,
         children_under_6_per_ind: np.ndarray | None = None,
+        taxable_income_per_ind: np.ndarray | None = None,
+        credit_base_per_ind: np.ndarray | None = None,
     ) -> None:
         """Calculate all tax revenues for the current period.
 
@@ -311,17 +318,23 @@ class CentralGovernment(Agent):
         - Social insurance contributions
         - Capital formation and export taxes
 
-        When ``current_ind_rental_income`` and ``current_ind_financial_income``
-        are provided (not None), the progressive PIT is applied to the
-        combined individual taxable base:
-        employee_income + rental_income + financial_income.
+        Progressive PIT consumes two pre-assembled pools — taxable income
+        per individual (``taxable_income_per_ind``) and credit base per
+        individual (``credit_base_per_ind``) — built in the processing
+        phase (see :mod:`macromodel.agents.central_government.pit_pools`).
+        When they are not supplied (e.g. direct/unit-test calls), they are
+        assembled here from the raw income and household-context arguments
+        via the same shared builders, so behaviour is identical either way.
 
         Args:
             current_ind_employee_income (np.ndarray): Employee incomes per individual
             current_total_rent_paid (float): Total rent paid by renters (scalar)
             current_income_financial_assets (np.ndarray): Financial income per household
-            current_ind_rental_income (Optional[np.ndarray]): Gross rental income per individual
-            current_ind_financial_income (Optional[np.ndarray]): Financial income per individual
+            current_ind_rental_income (Optional[np.ndarray]): Gross rental income per individual.
+                Used only to assemble the taxable pool in the direct-call fallback (when
+                ``taxable_income_per_ind`` is not supplied); ignored when the pools are passed.
+            current_ind_financial_income (Optional[np.ndarray]): Financial income per individual.
+                Fallback-only, same as ``current_ind_rental_income``.
             current_ind_activity (np.ndarray): Individual activity status
             current_ind_realised_cons (np.ndarray): Consumption levels
             current_bank_profits (np.ndarray): Bank profits
@@ -338,6 +351,10 @@ class CentralGovernment(Agent):
             households_n_adults (Optional[np.ndarray]): Number of adults per household
             children_under_18_per_ind (Optional[np.ndarray]): Children under 18 in individual's household
             children_under_6_per_ind (Optional[np.ndarray]): Children under 6 in individual's household
+            taxable_income_per_ind (Optional[np.ndarray]): Pool A — pre-assembled
+                taxable income per individual. Built internally when omitted.
+            credit_base_per_ind (Optional[np.ndarray]): Pool B — pre-assembled
+                non-refundable credit base per individual. Built internally when omitted.
         """
         # Taxes on production
         self.ts.taxes_production.append(
@@ -367,188 +384,40 @@ class CentralGovernment(Agent):
         # this is the standard taxable base for personal income tax)
         tot_wages_employed_ind = np.sum([current_ind_employee_income[current_ind_activity == ActivityStatus.EMPLOYED]])
 
-        # Build the individual-level taxable base for progressive PIT.
-        taxable_base_per_ind = current_ind_employee_income * (
-            1 - self.states["Employee Social Insurance Tax"]
-        )
-
-        # When rental and financial income are available at the individual
-        # level (distributed from households), add them to the taxable base.
-        use_individual_income = (
-            current_ind_rental_income is not None
-            and current_ind_financial_income is not None
-        )
-        if use_individual_income:
-            taxable_base_per_ind = (
-                taxable_base_per_ind
-                + current_ind_rental_income
-                + current_ind_financial_income
-            )
-
         # Personal income tax: progressive when a schedule is
         # configured, otherwise flat on all income components.
         pit_thresholds = self.states.get("pit_thresholds")
         pit_rates = self.states.get("pit_rates")
 
         if pit_thresholds is not None and pit_rates is not None:
-            # --- Progressive PIT on combined individual taxable base ---
-
-            # Apply per-individual taxable-income deductions (reduces the
-            # base before bracket thresholds, so it can drop a filer into
-            # a lower bracket).
-            pit_taxable_income_deductions = self.states.get("pit_taxable_income_deductions")
-            taxable_income_for_brackets = taxable_base_per_ind
-            if pit_taxable_income_deductions is not None and pit_taxable_income_deductions > 0:
-                taxable_income_for_brackets = np.maximum(
-                    0.0, taxable_base_per_ind - pit_taxable_income_deductions
+            # --- Progressive PIT on the two pre-assembled pools ---
+            # Pool A (taxable income) and Pool B (credit base) are normally
+            # built in the processing phase (country.py) and passed in.
+            # When omitted (direct / unit-test calls), assemble them here
+            # from the raw inputs via the shared pit_pools builders, so the
+            # result is identical regardless of caller.
+            if taxable_income_per_ind is None:
+                ctx = PitContext(
+                    employee_income=current_ind_employee_income,
+                    employee_si_rate=float(self.states["Employee Social Insurance Tax"]),
+                    rental_income=current_ind_rental_income,
+                    financial_income=current_ind_financial_income,
+                    individuals_age=individuals_age,
+                    individuals_corr_households=individuals_corr_households,
+                    households_type=households_type,
+                    households_n_adults=households_n_adults,
+                    children_under_18_per_ind=children_under_18_per_ind,
+                    children_under_6_per_ind=children_under_6_per_ind,
                 )
+                taxable_income_per_ind = build_taxable_income_pool(ctx)
+                if credit_base_per_ind is None:
+                    credit_base_per_ind = build_credit_base_pool(
+                        self.states.get("pit_tax_credits"),
+                        taxable_income_per_ind,
+                        ctx,
+                    )
 
-            pit_per_individual = compute_progressive_tax(
-                taxable_income_for_brackets, pit_thresholds, pit_rates
-            )
-
-            # Apply non-refundable tax credits when configured.
-            # Each component contributes its base amount for eligible
-            # individuals (e.g. Personal Amount for all, Age Amount for
-            # age ≥ 65).  Total credit = Σ eligible bases × pit_rates[0].
-            # When no credits are configured, this is a no-op.
-            pit_tax_credits = self.states.get("pit_tax_credits")
-
-            if pit_tax_credits is not None and len(pit_tax_credits) > 0:
-                n_ind = len(pit_per_individual)
-
-                # --- Build per-individual household-context arrays ---
-                # in_couple_household[i] = True if individual i lives in a
-                # couple-type household (2 adults <65, 1 adult ≥65, couple
-                # with/without children).
-                in_couple_household = None
-                is_single_parent = None
-                spouse_income_per_ind = None  # spouse's taxable_base
-
-                if (
-                    individuals_corr_households is not None
-                    and households_type is not None
-                    and households_n_adults is not None
-                ):
-                    from macromodel.agents.households.household_properties import HouseholdType
-
-                    # Couple households: TWO_ADULTS_YOUNGER_THAN_65, TWO_ADULTS_ONE_AT_LEAST_65,
-                    # TWO_ADULTS_WITH_ONE_CHILD, TWO_ADULTS_WITH_TWO_CHILDREN,
-                    # TWO_ADULTS_WITH_AT_LEAST_THREE_CHILDREN
-                    couple_types = {
-                        HouseholdType.TWO_ADULTS_YOUNGER_THAN_65,
-                        HouseholdType.TWO_ADULTS_ONE_AT_LEAST_65,
-                        HouseholdType.TWO_ADULTS_WITH_ONE_CHILD,
-                        HouseholdType.TWO_ADULTS_WITH_TWO_CHILDREN,
-                        HouseholdType.TWO_ADULTS_WITH_AT_LEAST_THREE_CHILDREN,
-                    }
-                    single_parent_types = {
-                        HouseholdType.SINGLE_PARENT_WITH_CHILDREN,
-                    }
-
-                    hh_id_of_ind = individuals_corr_households.astype(int)
-                    hh_type_of_ind = np.array([
-                        households_type[h] if h < len(households_type) else None
-                        for h in hh_id_of_ind
-                    ])
-
-                    in_couple_household = np.array([
-                        h_type in couple_types for h_type in hh_type_of_ind
-                    ])
-                    is_single_parent = np.array([
-                        h_type in single_parent_types for h_type in hh_type_of_ind
-                    ])
-
-                    # Build spouse-income array for spousal amount clawback.
-                    # Spouse income = taxable_base_per_ind of the other adult
-                    # in the couple household (the one NOT claiming the credit).
-                    # For individuals NOT in a couple household, spouse_income
-                    # is set to a large number so the clawback never applies
-                    # (0 credit after clawback, but they're already filtered by
-                    # eligibility).
-                    spouse_income_per_ind = np.full(n_ind, np.inf)
-                    for hh_id in np.unique(hh_id_of_ind):
-                        hh_mask = hh_id_of_ind == hh_id
-                        hh_inds = np.where(hh_mask)[0]
-                        if len(hh_inds) == 2 and hh_id < len(households_type):
-                            hh_type = households_type[hh_id]
-                            if hh_type in couple_types:
-                                # Each spouse's "spouse_income" = the OTHER's taxable base
-                                spouse_income_per_ind[hh_inds[0]] = taxable_base_per_ind[hh_inds[1]]
-                                spouse_income_per_ind[hh_inds[1]] = taxable_base_per_ind[hh_inds[0]]
-
-                per_ind_credit_base = np.zeros(n_ind)
-
-                for tc in pit_tax_credits:
-                    kind = tc["kind"]
-                    amount = tc["amount"]
-                    age_min = tc.get("age_min")
-
-                    # ── eligibility mask ──
-                    if age_min is not None and individuals_age is not None:
-                        eligible = individuals_age >= age_min
-                    elif kind == "Spousal Amount" and in_couple_household is not None:
-                        eligible = in_couple_household.copy()
-                    elif kind == "Equivalent To Spouse Amount" and is_single_parent is not None:
-                        eligible = is_single_parent.copy()
-                    elif kind.startswith("Child Amount"):
-                        # Child credits are claimed by adults with children;
-                        # amount is per-child.  Eligibility is gated by
-                        # having ≥1 child of the relevant age (a parent).
-                        eligible = np.ones(n_ind, dtype=bool)
-                    else:
-                        # Universal credit (e.g. Personal Amount)
-                        eligible = np.ones(n_ind, dtype=bool)
-
-                    # ── credit amount per individual ──
-                    credit_amt = np.where(eligible, amount, 0.0)
-
-                    # ── per-child multiplier ──
-                    # Amount in the CSV is per eligible child.
-                    if kind == "Child Amount Under 18" and children_under_18_per_ind is not None:
-                        credit_amt = amount * children_under_18_per_ind
-                    elif kind == "Child Amount Under 6" and children_under_6_per_ind is not None:
-                        credit_amt = amount * children_under_6_per_ind
-
-                    # ── Age Amount phaseout ──
-                    # Formula: credit = max(0, amount − rate × max(0, own_income − clawback_start))
-                    # where rate = amount / (cap − clawback_start), derived from the CSV data.
-                    # Phaseout is against the individual's OWN taxable income.
-                    if kind == "Age Amount":
-                        cs = tc.get("clawback_start")
-                        cc = tc.get("clawback_cap")
-                        if cs is not None and cc is not None and cc > cs:
-                            clawback_rate = amount / (cc - cs)
-                            excess = np.maximum(0.0, taxable_base_per_ind - cs)
-                            credit_amt = np.maximum(0.0, amount - clawback_rate * excess)
-
-                    # ── spousal / eligible-dependant income test ──
-                    # Real BC formula: credit = max(0, base_amount − other_income)
-                    # where other_income = spouse's taxable income (spousal amount)
-                    # or dependent's taxable income (equivalent to spouse amount).
-                    if kind == "Spousal Amount" and spouse_income_per_ind is not None:
-                        credit_amt = np.maximum(0.0, amount - spouse_income_per_ind)
-                    elif kind == "Equivalent To Spouse Amount":
-                        # Dependent has no income in the model → credit = full base
-                        credit_amt = np.where(eligible, amount, 0.0)
-
-                    per_ind_credit_base += credit_amt
-
-                credit_per_ind = per_ind_credit_base * float(pit_rates[0])
-                pit_per_individual = np.maximum(0.0, pit_per_individual - credit_per_ind)
-
-            total_income_tax = pit_per_individual.sum()
-            rental_tax_revenue = (
-                current_ind_rental_income.sum() if use_individual_income
-                else self.states["Income Tax"] * current_total_rent_paid
-            )
-
-            # Update the scalar effective rate so that behavioural decisions
-            # (wage-setting, after-tax income, rental income) stay aligned
-            # with the progressive schedule.
-            total_taxable_base = taxable_base_per_ind.sum()
-            if total_taxable_base > 0:
-                self.states["Income Tax"] = float(total_income_tax / total_taxable_base)
+            total_income_tax = self.compute_pit(taxable_income_per_ind, credit_base_per_ind)
         else:
             # --- Flat tax (backward-compatible path) ---
             total_income_tax = (
@@ -556,16 +425,79 @@ class CentralGovernment(Agent):
                 + self.states["Income Tax"] * current_total_rent_paid
                 + self.states["Income Tax"] * current_income_financial_assets.sum()
             )
-            rental_tax_revenue = self.states["Income Tax"] * current_total_rent_paid
 
         self.ts.taxes_income.append([total_income_tax])
-        self.ts.taxes_rental_income.append([rental_tax_revenue])
+
+        # Rental tax reported for the period.  This is a *reporting* figure
+        # (it feeds the GDP rent_received term), not extra revenue — the
+        # rental tax is already inside taxes_income.  Computed exactly as in
+        # the original model: the effective Income Tax rate (updated by
+        # compute_pit in the progressive path) on household rent paid.
+        self.ts.taxes_rental_income.append(
+            [self.states["Income Tax"] * current_total_rent_paid]
+        )
 
         # Taxes on employer social insurance
         self.ts.taxes_employer_si.append([self.states["Employer Social Insurance Tax"] * tot_wages_employed_ind])
 
         # Taxes on employee social insurance
         self.ts.taxes_employee_si.append([self.states["Employee Social Insurance Tax"] * tot_wages_employed_ind])
+
+    def compute_pit(
+        self,
+        taxable_income_per_ind: np.ndarray,
+        credit_base_per_ind: np.ndarray | None = None,
+    ) -> float:
+        """Apply fixed PIT policy to the two assembled pools.
+
+        This is the government's tax *core*. It applies taxable-income
+        deductions, the progressive bracket schedule, and values the
+        credit base at the bottom marginal rate — then floors net tax at
+        zero. It never references individual income streams or credit
+        kinds, so adding either (in
+        :mod:`macromodel.agents.central_government.pit_pools`) leaves this
+        method untouched.
+
+        As a side effect, the scalar ``states["Income Tax"]`` effective
+        rate is updated to the schedule-implied average so that
+        behavioural decisions (wage-setting, after-tax income, rental
+        income) stay aligned with the progressive schedule.
+
+        Args:
+            taxable_income_per_ind: Pool A — taxable income per individual.
+            credit_base_per_ind: Pool B — summed non-refundable credit base
+                per individual (``None`` or zeros when no credits apply).
+
+        Returns:
+            float: Total personal income tax revenue.
+        """
+        pit_thresholds = self.states["pit_thresholds"]
+        pit_rates = self.states["pit_rates"]
+
+        # Taxable-income deductions reduce the base before the brackets,
+        # so they can drop a filer into a lower bracket.
+        deductions = self.states.get("pit_taxable_income_deductions")
+        base_for_brackets = taxable_income_per_ind
+        if deductions is not None and deductions > 0:
+            base_for_brackets = np.maximum(0.0, taxable_income_per_ind - deductions)
+
+        pit_per_individual = compute_progressive_tax(
+            base_for_brackets, pit_thresholds, pit_rates
+        )
+
+        # Value the (non-refundable) credit base at the bottom marginal rate.
+        if credit_base_per_ind is not None:
+            pit_per_individual = np.maximum(
+                0.0, pit_per_individual - credit_base_per_ind * float(pit_rates[0])
+            )
+
+        total_income_tax = float(pit_per_individual.sum())
+
+        total_taxable_base = float(taxable_income_per_ind.sum())
+        if total_taxable_base > 0:
+            self.states["Income Tax"] = total_income_tax / total_taxable_base
+
+        return total_income_tax
 
     def compute_taxes_on_products(self) -> float:
         """Calculate total taxes on products and production.
