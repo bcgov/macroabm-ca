@@ -360,18 +360,21 @@ class Country:
         # Scale PIT bracket thresholds to agent-level income units.
         # Each synthetic agent represents *scale* real people, so a
         # $50k bracket for individuals becomes $50k × scale for agents.
-        if (
-            country_configuration.central_government.pit_brackets is not None
-            and scale > 1
-        ):
-            country_configuration.central_government.pit_brackets = [
+        # Scale a *copy* of the central-government config — never mutate the
+        # caller-owned configuration, which may be reused across repeated
+        # Country construction or calibration loops (otherwise the brackets
+        # would be multiplied again on every reuse).
+        central_government_config = country_configuration.central_government
+        if central_government_config.pit_brackets is not None and scale > 1:
+            central_government_config = deepcopy(central_government_config)
+            central_government_config.pit_brackets = [
                 (threshold * scale, rate)
-                for threshold, rate in country_configuration.central_government.pit_brackets
+                for threshold, rate in central_government_config.pit_brackets
             ]
 
         central_government = CentralGovernment.from_pickled_agent(
             synthetic_central_government=synthetic_country.central_government,
-            configuration=country_configuration.central_government,
+            configuration=central_government_config,
             country_name=country_name,
             all_country_names=all_country_names,
             taxes_net_subsidies=taxes_less_subsidies,
@@ -1471,6 +1474,10 @@ class Country:
             n_individuals=len(self.individuals.states["Corresponding Household ID"]),
         )
 
+        ind_ages = self.individuals.states.get("Age")
+        ind_corr_hh = self.individuals.states.get("Corresponding Household ID")
+        have_child_context = ind_ages is not None and ind_corr_hh is not None
+
         pit_ctx = PitContext(
             employee_income=self.individuals.ts.current("employee_income"),
             employee_si_rate=float(
@@ -1478,19 +1485,17 @@ class Country:
             ),
             rental_income=rental_income_per_individual,
             financial_income=financial_income_per_individual,
-            individuals_age=self.individuals.states.get("Age"),
-            individuals_corr_households=self.individuals.states.get("Corresponding Household ID"),
+            individuals_age=ind_ages,
+            individuals_corr_households=ind_corr_hh,
             households_type=self.households.states.get("Type"),
             households_n_adults=self.households.states.get("Number of Adults"),
-            children_under_18_per_ind=_compute_children_per_individual(
-                self.individuals.states.get("Age"),
-                self.individuals.states["Corresponding Household ID"],
-                18,
+            children_under_18_per_ind=(
+                _compute_children_per_individual(ind_ages, ind_corr_hh, 18)
+                if have_child_context else None
             ),
-            children_under_6_per_ind=_compute_children_per_individual(
-                self.individuals.states.get("Age"),
-                self.individuals.states["Corresponding Household ID"],
-                6,
+            children_under_6_per_ind=(
+                _compute_children_per_individual(ind_ages, ind_corr_hh, 6)
+                if have_child_context else None
             ),
         )
         taxable_income_per_ind = build_taxable_income_pool(pit_ctx)
@@ -1506,6 +1511,11 @@ class Country:
                 self.households.states["Tenure Status of the Main Residence"] == 3
             ].sum(),
             current_income_financial_assets=self.households.ts.current("income_financial_assets"),
+            # Pass both individual income streams so the direct-call fallback
+            # (when the prebuilt pools below are omitted) can rebuild the
+            # taxable-income pool symmetrically. The main path uses the pools.
+            current_ind_rental_income=rental_income_per_individual,
+            current_ind_financial_income=financial_income_per_individual,
             current_ind_activity=self.individuals.states["Activity Status"],
             current_ind_realised_cons=self.households.ts.current("consumption"),
             current_bank_profits=self.banks.ts.current("profits"),

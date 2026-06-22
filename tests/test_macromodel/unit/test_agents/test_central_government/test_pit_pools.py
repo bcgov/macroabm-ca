@@ -48,6 +48,60 @@ class TestTaxableIncomePool:
         np.testing.assert_allclose(pool, [55.0])
 
 
+class TestTargetedCreditsRequireContext:
+    """Targeted credits must return zero when their required context is
+    missing — never silently become a universal credit."""
+
+    def _bare_ctx(self):
+        # Only income; no age, household, or child context.
+        return PitContext(
+            employee_income=np.array([40000.0, 40000.0]),
+            employee_si_rate=0.0,
+        )
+
+    def test_age_amount_without_age_context_is_zero(self):
+        ctx = self._bare_ctx()
+        taxable = build_taxable_income_pool(ctx)
+        credit_defs = [{
+            "kind": "Age Amount", "amount": 4426.0, "age_min": 65,
+            "clawback_start": 32943.0, "clawback_cap": 62450.0,
+        }]
+        base = build_credit_base_pool(credit_defs, taxable, ctx)
+        np.testing.assert_array_equal(base, [0.0, 0.0])
+
+    def test_spousal_amount_without_household_context_is_zero(self):
+        ctx = self._bare_ctx()
+        taxable = build_taxable_income_pool(ctx)
+        credit_defs = [{"kind": "Spousal Amount", "amount": 12000.0}]
+        base = build_credit_base_pool(credit_defs, taxable, ctx)
+        np.testing.assert_array_equal(base, [0.0, 0.0])
+
+    def test_equivalent_to_spouse_without_household_context_is_zero(self):
+        ctx = self._bare_ctx()
+        taxable = build_taxable_income_pool(ctx)
+        credit_defs = [{"kind": "Equivalent To Spouse Amount", "amount": 12000.0}]
+        base = build_credit_base_pool(credit_defs, taxable, ctx)
+        np.testing.assert_array_equal(base, [0.0, 0.0])
+
+    def test_child_credits_without_child_context_are_zero(self):
+        ctx = self._bare_ctx()
+        taxable = build_taxable_income_pool(ctx)
+        for kind in ("Child Amount Under 18", "Child Amount Under 6"):
+            base = build_credit_base_pool(
+                [{"kind": kind, "amount": 100.0}], taxable, ctx
+            )
+            np.testing.assert_array_equal(base, [0.0, 0.0])
+
+    def test_universal_credit_still_applies_without_context(self):
+        """A genuinely universal credit (Personal Amount) is unaffected."""
+        ctx = self._bare_ctx()
+        taxable = build_taxable_income_pool(ctx)
+        base = build_credit_base_pool(
+            [{"kind": "Personal Amount", "amount": 9869.0}], taxable, ctx
+        )
+        np.testing.assert_allclose(base, [9869.0, 9869.0])
+
+
 class TestCreditBasePool:
     def test_no_credits_returns_zeros(self):
         taxable = np.array([100.0, 200.0])
@@ -221,6 +275,32 @@ class TestSpousalAmountGrouping:
         # ind1: single → spouse income inf → 0
         np.testing.assert_allclose(base, [2000.0, 0.0, 0.0])
 
+    def test_spousal_pairs_adults_ignoring_children(self):
+        """A couple-with-children household has 4 individuals (2 adults + 2
+        children) in the array, but only the two adults are paired — the
+        children must not block the pairing or receive the credit."""
+        from macromodel.agents.households.household_properties import HouseholdType
+
+        # ind0, ind1 = adults; ind2, ind3 = children; all in household 0.
+        ctx = PitContext(
+            employee_income=np.array([50000.0, 5000.0, 0.0, 0.0]),
+            employee_si_rate=0.0,
+            individuals_age=np.array([40, 38, 10, 8]),
+            individuals_corr_households=np.array([0, 0, 0, 0]),
+            households_type=np.array(
+                [HouseholdType.TWO_ADULTS_WITH_TWO_CHILDREN], dtype=object
+            ),
+            households_n_adults=np.array([2]),
+        )
+        taxable = build_taxable_income_pool(ctx)  # [50000, 5000, 0, 0]
+
+        credit_defs = [{"kind": "Spousal Amount", "amount": 12000.0}]
+        base = build_credit_base_pool(credit_defs, taxable, ctx)
+
+        # Adults are paired: ind0 spouse=5000 → 12000-5000=7000;
+        # ind1 spouse=50000 → 0. Children get no credit.
+        np.testing.assert_allclose(base, [7000.0, 0.0, 0.0, 0.0])
+
     def test_spousal_amount_clawback(self):
         """Spousal Amount falls to zero once the spouse's income exceeds
         the base amount, and is partial when below it."""
@@ -236,12 +316,15 @@ class TestSpousalAmountGrouping:
         np.testing.assert_allclose(base, [0.0, 7000.0])
 
     def test_spouse_income_matches_bruteforce(self):
-        """Vectorised grouping equals the original per-household scan."""
+        """Vectorised grouping equals the original per-household scan in the
+        no-ages fallback (all members treated as adults).  Child-aware
+        pairing is covered by test_spousal_pairs_adults_ignoring_children."""
         from macromodel.agents.central_government.pit_pools import _household_context
 
         rng = np.random.default_rng(0)
         # 10 individuals scattered across households 0..3 (only 2-adult
-        # households should be paired).
+        # households should be paired).  No ages → all members count as
+        # adults, so household types here are all childless couples.
         corr = np.array([0, 3, 0, 1, 2, 3, 1, 2, 1, 0])
         taxable = rng.uniform(1000, 90000, size=len(corr))
 
@@ -252,7 +335,7 @@ class TestSpousalAmountGrouping:
                 HouseholdType.TWO_ADULTS_YOUNGER_THAN_65,   # hh0 (3 members → not paired)
                 HouseholdType.THREE_OR_MORE_ADULTS,         # hh1 (non-couple)
                 HouseholdType.TWO_ADULTS_ONE_AT_LEAST_65,   # hh2 (2 members → paired)
-                HouseholdType.TWO_ADULTS_WITH_ONE_CHILD,    # hh3 (2 members → paired)
+                HouseholdType.TWO_ADULTS_YOUNGER_THAN_65,   # hh3 (2 members → paired)
             ],
             dtype=object,
         )

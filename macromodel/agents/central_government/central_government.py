@@ -393,10 +393,13 @@ class CentralGovernment(Agent):
             # --- Progressive PIT on the two pre-assembled pools ---
             # Pool A (taxable income) and Pool B (credit base) are normally
             # built in the processing phase (country.py) and passed in.
-            # When omitted (direct / unit-test calls), assemble them here
-            # from the raw inputs via the shared pit_pools builders, so the
-            # result is identical regardless of caller.
-            if taxable_income_per_ind is None:
+            # When either pool is omitted (direct / unit-test calls),
+            # assemble the missing one(s) here from the raw inputs via the
+            # shared pit_pools builders, so the result is identical
+            # regardless of caller.  Each pool is built independently:
+            # supplying taxable income alone must still apply configured
+            # credits (otherwise gross PIT would leak through).
+            if taxable_income_per_ind is None or credit_base_per_ind is None:
                 ctx = PitContext(
                     employee_income=current_ind_employee_income,
                     employee_si_rate=float(self.states["Employee Social Insurance Tax"]),
@@ -409,7 +412,8 @@ class CentralGovernment(Agent):
                     children_under_18_per_ind=children_under_18_per_ind,
                     children_under_6_per_ind=children_under_6_per_ind,
                 )
-                taxable_income_per_ind = build_taxable_income_pool(ctx)
+                if taxable_income_per_ind is None:
+                    taxable_income_per_ind = build_taxable_income_pool(ctx)
                 if credit_base_per_ind is None:
                     credit_base_per_ind = build_credit_base_pool(
                         self.states.get("pit_tax_credits"),

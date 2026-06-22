@@ -276,6 +276,45 @@ class TestCentralGovernmentPIT:
         actual_reduction = pit_raw.sum() - tax_with_credits
         assert actual_reduction == pytest.approx(expected_credit, rel=1e-10)
 
+    def test_credits_applied_when_only_taxable_pool_supplied(
+        self, test_central_government_pit_full,
+    ):
+        """Supplying taxable_income_per_ind but omitting credit_base_per_ind
+        must still apply configured credits (the missing pool is built),
+        not leak gross PIT through."""
+        cg = test_central_government_pit_full
+
+        emp_income = np.array([50000.0, 50000.0])
+        activity = np.array([ActivityStatus.EMPLOYED, ActivityStatus.EMPLOYED])
+        taxable = emp_income * (1 - cg.states["Employee Social Insurance Tax"])
+
+        cg.compute_taxes(
+            current_ind_employee_income=emp_income,
+            current_total_rent_paid=0.0,
+            current_income_financial_assets=np.zeros(2),
+            current_ind_activity=activity,
+            current_ind_realised_cons=np.zeros(2),
+            current_bank_profits=np.zeros(1),
+            current_firm_production=np.zeros(1),
+            current_firm_price=np.ones(1),
+            current_firm_profits=np.zeros(1),
+            current_firm_industries=np.zeros(1, dtype=int),
+            current_household_new_real_wealth=np.zeros(1),
+            taxes_less_subsidies_rates=np.zeros(1),
+            current_total_exports=0.0,
+            # Pool A provided, Pool B intentionally omitted.
+            taxable_income_per_ind=taxable,
+        )
+
+        tax = cg.ts.get_aggregate("taxes_income")[-1]
+        pit_raw = compute_progressive_tax(
+            taxable, cg.states["pit_thresholds"], cg.states["pit_rates"],
+        ).sum()
+        # Credits must have been applied → net tax strictly below gross PIT.
+        assert tax < pit_raw
+        expected_reduction = 9869.0 * float(cg.states["pit_rates"][0]) * 2
+        assert pit_raw - tax == pytest.approx(expected_reduction, rel=1e-10)
+
     def test_tax_credits_floor_at_zero(
         self, test_central_government_pit_full,
     ):

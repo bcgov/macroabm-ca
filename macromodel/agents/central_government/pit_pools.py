@@ -169,20 +169,33 @@ def _household_context(
     in_couple = np.array([t in couple_types for t in hh_type_of_ind])
     is_single_parent = np.array([t in single_parent_types for t in hh_type_of_ind])
 
-    # Spouse income = the other adult's taxable base in a two-adult couple
-    # household; inf elsewhere.  Group individuals by household via a single
-    # sort (O(N log N)) instead of rescanning the whole array per household
-    # (which would be O(H * N)).
+    # Spouse income = the other ADULT's taxable base in a two-adult couple
+    # household; inf elsewhere.  The individual array includes children, so
+    # pairing must be over adults (age >= 18) only — otherwise a couple with
+    # children (4+ members) never groups as a pair and loses the credit.
+    # Group via a single sort (O(N log N)) rather than rescanning the array
+    # per household (O(H * N)).
     spouse_income = np.full(n_ind, np.inf)
-    order = np.argsort(hh_of_ind, kind="stable")
+
+    ages = ctx.individuals_age
+    if ages is not None:
+        adult_idx = np.where(np.asarray(ages) >= 18)[0]
+    else:
+        # Without ages we cannot single out adults; fall back to all members
+        # (correct for childless couples, the only 2-member couple case).
+        adult_idx = np.arange(n_ind)
+
+    adult_hh = hh_of_ind[adult_idx]
+    order = np.argsort(adult_hh, kind="stable")
+    sorted_idx = adult_idx[order]
     _, group_start, group_counts = np.unique(
-        hh_of_ind[order], return_index=True, return_counts=True
+        adult_hh[order], return_index=True, return_counts=True
     )
 
-    # Households contributing exactly two adults to the individual array.
+    # Couple households with exactly two adults.
     pair_groups = group_counts == 2
-    first = order[group_start[pair_groups]]
-    second = order[group_start[pair_groups] + 1]
+    first = sorted_idx[group_start[pair_groups]]
+    second = sorted_idx[group_start[pair_groups] + 1]
 
     # Keep only couple-type households.  in_couple already encodes both the
     # type membership and the id bounds check, and both adults share it.
@@ -207,57 +220,64 @@ def _credit_amount(
     Add a branch here to support a new credit ``kind``.  The returned
     array is the credit *base* (dollar amount), not the tax reduction —
     the agent multiplies the summed base by the bottom marginal rate.
+
+    Targeted credits require their context (age, household relationships,
+    or child counts).  Because :class:`PitContext` allows those fields to
+    be ``None``, a credit whose required context is missing returns **zero**
+    — it must never silently fall through to a universal amount.
     """
     kind = tc["kind"]
     amount = tc["amount"]
     age_min = tc.get("age_min")
     n_ind = len(taxable_income_per_ind)
     ages = ctx.individuals_age
+    zeros = np.zeros(n_ind)
 
-    # ── eligibility mask ──
-    if age_min is not None and ages is not None:
-        eligible = ages >= age_min
-    elif kind == "Spousal Amount" and household.in_couple is not None:
-        # Read-only below (np.where never mutates), so no copy needed.
-        eligible = household.in_couple
-    elif kind == "Equivalent To Spouse Amount" and household.is_single_parent is not None:
-        eligible = household.is_single_parent
-    else:
-        # Universal credit (e.g. Personal Amount) or child credits (gated
-        # by the per-child multiplier below).
-        eligible = np.ones(n_ind, dtype=bool)
-
-    credit_amt = np.where(eligible, amount, 0.0)
-
-    # ── per-child multiplier (amount is per eligible child) ──
-    if kind == "Child Amount Under 18" and ctx.children_under_18_per_ind is not None:
-        credit_amt = amount * ctx.children_under_18_per_ind
-    elif kind == "Child Amount Under 6" and ctx.children_under_6_per_ind is not None:
-        credit_amt = amount * ctx.children_under_6_per_ind
-
-    # ── Age Amount phaseout (against the individual's OWN taxable income) ──
-    # credit = max(0, amount − rate × max(0, own_income − clawback_start))
-    # where rate = amount / (cap − clawback_start).
-    # Age Amount applies only to individuals aged ≥ age_min, so the
-    # phased-out amount must stay masked by `eligible` — otherwise the
-    # clawback override would hand the credit to under-65 filers too.
+    # ── Age Amount: age-gated, with an optional own-income phaseout ──
     if kind == "Age Amount":
+        if age_min is None or ages is None:
+            return zeros
+        eligible = ages >= age_min
         cs = tc.get("clawback_start")
         cc = tc.get("clawback_cap")
         if cs is not None and cc is not None and cc > cs:
             clawback_rate = amount / (cc - cs)
             excess = np.maximum(0.0, taxable_income_per_ind - cs)
-            credit_amt = np.where(
+            return np.where(
                 eligible, np.maximum(0.0, amount - clawback_rate * excess), 0.0
             )
+        return np.where(eligible, amount, 0.0)
 
-    # ── spousal / eligible-dependant income test ──
-    # credit = max(0, base_amount − other_income), where other_income is
-    # the spouse's taxable income (inf where there is no spouse → 0 credit).
-    if kind == "Spousal Amount" and household.spouse_income is not None:
-        credit_amt = np.maximum(0.0, amount - household.spouse_income)
-    elif kind == "Equivalent To Spouse Amount":
-        # Dependant has no income in the model → full base where eligible.
-        credit_amt = np.where(eligible, amount, 0.0)
+    # ── Spousal Amount: couple households, reduced by the spouse's income ──
+    # credit = max(0, base_amount − spouse_income); spouse_income is inf for
+    # non-couples so they clamp to zero.
+    if kind == "Spousal Amount":
+        if household.in_couple is None or household.spouse_income is None:
+            return zeros
+        return np.maximum(0.0, amount - household.spouse_income)
 
-    return credit_amt
+    # ── Equivalent To Spouse Amount: single parents only ──
+    # The dependant has no income in the model → full base where eligible.
+    if kind == "Equivalent To Spouse Amount":
+        if household.is_single_parent is None:
+            return zeros
+        return np.where(household.is_single_parent, amount, 0.0)
+
+    # ── Per-child credits: amount is per eligible child ──
+    if kind == "Child Amount Under 18":
+        if ctx.children_under_18_per_ind is None:
+            return zeros
+        return amount * ctx.children_under_18_per_ind
+    if kind == "Child Amount Under 6":
+        if ctx.children_under_6_per_ind is None:
+            return zeros
+        return amount * ctx.children_under_6_per_ind
+
+    # ── Other age-gated credits (age_min set, not Age Amount) ──
+    if age_min is not None:
+        if ages is None:
+            return zeros
+        return np.where(ages >= age_min, amount, 0.0)
+
+    # ── Universal credit (e.g. Personal Amount) ──
+    return np.full(n_ind, float(amount))
