@@ -4,11 +4,12 @@ This module is the one place that builds a fully-populated
 :class:`~macromodel.configurations.central_government_configuration.CentralGovernmentConfiguration`
 for a real run.  It combines the two sources of tax inputs the project adds:
 
-1. **Schedules** (multi-row, CPI-indexed tables) read from CSV files under
-   ``spoof_data/freda/`` via ``PITSchedule`` / ``TaxCreditSchedule`` — the
-   progressive bracket schedule and the non-refundable tax-credit amounts.
+1. **Schedules** (multi-row, year-ranged tables) read from CSV files under
+   ``spoof_data/freda/`` via ``PITSchedule`` / ``TaxCreditSchedule`` /
+   ``DividendTaxCreditSchedule`` — the progressive bracket schedule, the
+   non-refundable tax-credit amounts, and the dividend gross-up / DTC rates.
 2. **Scalars** (single-value assumptions) read from ``tax_parameters.yaml`` via
-   :func:`apply_tax_parameters` — dividend gross-up / DTC rates, the
+   :func:`apply_tax_parameters` — the dividend-integration switch, the
    small-business share, and the couple rental-income split.
 
 The result is a configuration object the existing ``Country.from_pickled_country``
@@ -30,24 +31,24 @@ later in ``Country.from_pickled_country``; the builder must not pre-scale.
 
 Tax-credit coverage
 -------------------
-The configuration layer (``TaxCreditDef``) can currently express only universal
-and age-based eligibility (plus clawback bounds).  Credits whose eligibility
-depends on household composition (e.g. Spousal Amount, Equivalent To Spouse) are
-*skipped* and logged, rather than silently applied to everyone — applying them
-universally would understate revenue.  They become includable once their
-eligibility is plumbed through ``TaxCreditDef`` and the runtime credit state.
+The runtime credit pool (``pit_pools._credit_amount``) dispatches by credit
+``kind`` and already implements universal, age-based, couple (Spousal Amount,
+income-tested) and single-parent (Equivalent To Spouse Amount) credits, deriving
+the household context per individual.  This builder therefore carries those
+kinds.  Credits whose eligibility the runtime does not yet evaluate (the
+per-child amounts, which require child-count context that is not always present)
+are *skipped* and logged rather than silently applied to everyone.  The
+allow-list below must stay in step with the ``kind`` branches in
+``_credit_amount``: a key is admitted here only once the runtime can apply the
+credit it gates.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from macro_data.readers.taxation.personal_income_tax.pit_schedule import PITSchedule
-from macro_data.readers.taxation.personal_income_tax.tax_credit_schedule import (
-    TaxCreditComponent,
-)
 from macromodel.configurations.central_government_configuration import (
     CentralGovernmentConfiguration,
     TaxCreditDef,
@@ -55,26 +56,40 @@ from macromodel.configurations.central_government_configuration import (
 
 from .tax_parameters_reader import apply_tax_parameters
 
+if TYPE_CHECKING:
+    from macro_data.readers.taxation.personal_income_tax.tax_credit_schedule import (
+        TaxCreditComponent,
+    )
+
 logger = logging.getLogger(__name__)
 
-# Eligibility keys that TaxCreditDef can represent.  A credit whose eligibility
-# dict contains any other key cannot be expressed yet and is skipped.
-_EXPRESSIBLE_ELIGIBILITY_KEYS = frozenset({"age_min"})
+# Eligibility keys the runtime credit pool can act on.  A credit whose
+# eligibility dict contains any other key is not yet applicable at runtime and is
+# skipped.  These map to the ``kind`` branches in ``pit_pools._credit_amount``:
+#   age_min            -> Age Amount (and other age-gated credits)
+#   in_couple_household -> Spousal Amount (income-tested against the spouse)
+#   is_single_parent   -> Equivalent To Spouse Amount
+# The per-child keys (num_children_under_*) are intentionally absent: the runtime
+# branch exists but requires child-count context, so those remain deferred.
+_EXPRESSIBLE_ELIGIBILITY_KEYS = frozenset(
+    {"age_min", "in_couple_household", "is_single_parent"}
+)
 
 
 def _credit_component_to_def(component: TaxCreditComponent) -> Optional[TaxCreditDef]:
     """Map a data-layer ``TaxCreditComponent`` to a config-layer ``TaxCreditDef``.
 
     Returns ``None`` (and logs) when the component's eligibility uses rules the
-    configuration layer cannot yet express, so the caller can skip it instead of
+    runtime credit pool cannot yet act on, so the caller can skip it instead of
     applying it universally.
     """
     extra_keys = set(component.eligibility) - _EXPRESSIBLE_ELIGIBILITY_KEYS
     if extra_keys:
         logger.warning(
             "Skipping tax credit '%s': eligibility rule(s) %s are not yet "
-            "expressible in TaxCreditDef (only universal/age-based credits are "
-            "supported). The credit is omitted to avoid applying it universally.",
+            "applied by the runtime credit pool (supported: universal, age, "
+            "couple, single-parent). The credit is omitted to avoid applying it "
+            "universally.",
             component.kind,
             sorted(extra_keys),
         )
@@ -94,6 +109,7 @@ def build_central_government_configuration(
     jurisdiction: str = "bc",
     tax_year: int = 2014,
     schedule_filename: Optional[str] = None,
+    dividend_schedule_filename: Optional[str] = None,
     params_path: str | Path | None = None,
     base_config: Optional[CentralGovernmentConfiguration] = None,
 ) -> CentralGovernmentConfiguration:
@@ -101,25 +117,43 @@ def build_central_government_configuration(
 
     Args:
         jurisdiction: Jurisdiction key, used both for the default schedule
-            filename and to look up the scalar block in ``tax_parameters.yaml``.
+            filenames and to look up the scalar block in ``tax_parameters.yaml``.
         tax_year: Tax year for which to compute the (CPI-indexed) brackets and
-            credit amounts, and the year key for the scalar lookup.
+            credit amounts, select the dividend rates, and key the scalar lookup.
         schedule_filename: PIT bracket CSV under ``spoof_data/freda/``.  Defaults
             to ``f"{jurisdiction}_pit_2014.csv"`` (the base-year file; later years
             are reached by CPI-indexing that file).  The companion
             ``*_tax_credit_amount_*.csv`` is auto-discovered by ``PITSchedule``.
+        dividend_schedule_filename: Dividend gross-up / DTC rate CSV under
+            ``spoof_data/freda/``.  Defaults to
+            ``f"{jurisdiction}_dividend_tax_credit_schedule.csv"``.  The row
+            covering *tax_year* supplies the per-type gross-up and DTC rates.
         params_path: Optional override for the scalar YAML file location.
         base_config: Optional base configuration whose non-tax fields (functions,
             social benefits) are preserved.  Defaults to a fresh
             ``CentralGovernmentConfiguration()``.
 
     Returns:
-        A ``CentralGovernmentConfiguration`` with ``pit_brackets`` and
-        ``pit_tax_credits`` populated from the schedules and the scalar fields
-        overridden from the YAML.
+        A ``CentralGovernmentConfiguration`` with ``pit_brackets``,
+        ``pit_tax_credits`` and the dividend gross-up / DTC rates populated from
+        the schedules, and the remaining scalar fields overridden from the YAML.
     """
+    # Deferred imports: the data-layer schedule readers (and pandas) load only
+    # when a config is actually built, so importing this package for the config
+    # schema alone stays light.  This keeps the configurations layer free of an
+    # import-time dependency on macro_data, matching the runtime-deferral pattern
+    # used elsewhere (e.g. pit_pools._household_context, Firms.from_configuration).
+    from macro_data.readers.taxation.personal_income_tax.dividend_tax_credit_schedule import (
+        DividendTaxCreditSchedule,
+    )
+    from macro_data.readers.taxation.personal_income_tax.pit_schedule import (
+        PITSchedule,
+    )
+
     if schedule_filename is None:
         schedule_filename = f"{jurisdiction}_pit_2014.csv"
+    if dividend_schedule_filename is None:
+        dividend_schedule_filename = f"{jurisdiction}_dividend_tax_credit_schedule.csv"
 
     base = base_config if base_config is not None else CentralGovernmentConfiguration()
 
@@ -142,9 +176,22 @@ def build_central_government_configuration(
         ]
         pit_tax_credits = mapped or None
 
+    # ── Load the dividend gross-up / DTC rates for the year ──
+    dividend_schedule = DividendTaxCreditSchedule.from_name(dividend_schedule_filename)
+    dividend_rates = dividend_schedule.get_year_rates(tax_year=tax_year)
+    eligible = dividend_rates["eligible"]
+    non_eligible = dividend_rates["non_eligible"]
+
     # ── Apply schedules, then the scalar overrides from the YAML ──
     config = base.model_copy(
-        update={"pit_brackets": pit_brackets, "pit_tax_credits": pit_tax_credits}
+        update={
+            "pit_brackets": pit_brackets,
+            "pit_tax_credits": pit_tax_credits,
+            "dividend_eligible_gross_up": eligible.gross_up_rate,
+            "dividend_non_eligible_gross_up": non_eligible.gross_up_rate,
+            "dividend_eligible_dtc_rate": eligible.dtc_rate_of_grossed_up,
+            "dividend_non_eligible_dtc_rate": non_eligible.dtc_rate_of_grossed_up,
+        }
     )
     config = apply_tax_parameters(
         config, jurisdiction=jurisdiction, year=tax_year, path=params_path

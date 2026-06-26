@@ -117,9 +117,11 @@ class CentralGovernmentConfiguration(BaseModel):
     # The grossed-up amount is a tax fiction used only for the income-tax and
     # credit math; the actual dividend received by the household is unchanged.
     #
-    # Defaults are the 2014 BC values (see spoof_data/freda/
-    # bc_dividend_tax_credit_schedule.csv) and match the scalar overrides in
-    # tax_parameters.yaml, so applying that file to a default config is a no-op.
+    # The field defaults below are the 2014 BC values, kept so a bare config is
+    # self-consistent.  In a real run the gross-up and DTC rates are sourced from
+    # the schedule CSV spoof_data/freda/bc_dividend_tax_credit_schedule.csv (read
+    # by DividendTaxCreditSchedule) and applied by
+    # build_central_government_configuration; they are not YAML scalars.
     # Bank dividends are out of scope here (different federal rules) and keep
     # the legacy treatment.
     pit_dividend_integration: bool = Field(

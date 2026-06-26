@@ -489,6 +489,20 @@ class CentralGovernment(Agent):
         behavioural decisions (wage-setting, after-tax income, rental
         income) stay aligned with the progressive schedule.
 
+        Accepted coupling: when dividend integration is active, the
+        grossed-up dividends and the dividend tax credit also enter this
+        blended average, so the rate they imply feeds wage-setting and
+        consumption (a second-order "ripple").  This is accepted as a
+        bounded effect -- the computed provincial average (~5%) sits well
+        below the upstream OECD flat assumption (9%), so the small upward
+        nudge from dividends stays inside a realistic provincial band and
+        in fact narrows the gap to the flat baseline rather than
+        overshooting it.  Removing the ripple would require giving
+        wage-setting its own employment-income-specific rate, which would
+        move baseline wages/GDP even with dividends off and diverge from
+        upstream wage-setting; that refactor is therefore deferred to a
+        separate, parity-checked, sign-off-gated change.
+
         Args:
             taxable_income_per_ind: Pool A — taxable income per individual.
             credit_base_per_ind: Pool B (2a) — summed non-refundable credit

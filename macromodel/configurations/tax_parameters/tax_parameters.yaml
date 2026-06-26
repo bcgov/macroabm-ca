@@ -27,7 +27,7 @@ bc:
   2014:
     # ── Dividend integration (Canadian gross-up + dividend tax credit) ──
     # Master switch for the dividend block.  Kept False to preserve upstream
-    # parity; the values below are ready for when it is switched on.
+    # parity; the schedule rates are ready for when it is switched on.
     pit_dividend_integration: false
 
     # ASSUMPTION — provisional uniform split of firm dividends into
@@ -35,13 +35,10 @@ bc:
     # as other-than-eligible; (1 - s) is eligible.
     dividend_small_business_share: 0.90
 
-    # Published 2014 gross-up rates (taxable = (1 + rate) x cash dividend).
-    dividend_eligible_gross_up: 0.38
-    dividend_non_eligible_gross_up: 0.18
-
-    # Published 2014 BC dividend tax credit rates on the grossed-up dividend.
-    dividend_eligible_dtc_rate: 0.10
-    dividend_non_eligible_dtc_rate: 0.0259
+    # NOTE — the published gross-up and dividend-tax-credit rates are NOT scalars
+    # here.  They vary by year and dividend type and live in the schedule CSV
+    # spoof_data/freda/bc_dividend_tax_credit_schedule.csv, read by
+    # DividendTaxCreditSchedule and applied by build_central_government_configuration.
 
     # ── Household rental-income attribution ──
     # ASSUMPTION — share of a couple household's rental income assigned to the

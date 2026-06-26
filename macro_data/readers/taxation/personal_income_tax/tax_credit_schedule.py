@@ -34,8 +34,8 @@ The credit *kind* string is mapped to eligibility rules internally:
     ==================== ===============================================
     ``Personal Amount``   Universal (every individual).
     ``Age Amount``        Age ≥ 65.
-    ``Spousal Amount``    *(deferred — requires spousal income lookup)*
-    ``Equivalent To…``    *(deferred — requires single-parent detection)*
+    ``Spousal Amount``    Couple household, income-tested against the spouse.
+    ``Equivalent To…``    Single-parent household.
     ``CPP Amount``        *(deferred — requires contribution data)*
     ``EI Amount``         *(deferred — requires contribution data)*
     ``Pension Income…``   *(deferred — requires pension income data)*
@@ -76,7 +76,7 @@ _TC_REQUIRED_COLS = {
 _ELIGIBILITY_RULES: dict[str, dict[str, object]] = {
     "Personal Amount":          {},                                     # universal
     "Age Amount":               {"age_min": 65},
-    "Pension Income Amount":    {"age_min": 65},                       # age proxy for pension receipt
+    "Pension Income Amount":    {"has_eligible_pension_income": True},  # NOT age-based: CPP may start 60-70 and the credit also covers non-CPP pension income; requires pension-income data the model lacks, so it is deferred (skipped) rather than proxied by age
     "Spousal Amount":           {"in_couple_household": True},          # married / common-law
     "Equivalent To Spouse Amount": {"is_single_parent": True},         # single parent / caregiver
     "Child Amount Under 18":    {"num_children_under_18_min": 1},      # parent

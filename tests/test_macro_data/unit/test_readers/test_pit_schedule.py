@@ -55,9 +55,9 @@ def bc_2014_quick_adds(bc_2014_lower_bounds, bc_2014_rates) -> np.ndarray:
 def sample_csv_path() -> Path:
     """Write a minimal 2-bracket PIT CSV to a temp file."""
     csv_content = (
-        "tax_year,step,lower_bound,marginal_rate,indexing\n"
-        "2020,1,0,0.10,1\n"
-        "2020,2,50000,0.25,1\n"
+        "tax_year,lower_bound,marginal_rate,indexing\n"
+        "2020,0,0.10,1\n"
+        "2020,50000,0.25,1\n"
     )
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".csv", delete=False
@@ -376,10 +376,10 @@ class TestPITSchedule:
         """Only brackets with indexing=1 are inflated."""
         # Write a temp CSV with mixed indexing flags
         csv = (
-            "tax_year,step,lower_bound,marginal_rate,indexing\n"
-            "2020,1,0,0.10,1\n"       # indexed
-            "2020,2,50000,0.20,0\n"    # NOT indexed
-            "2020,3,100000,0.30,1\n"   # indexed
+            "tax_year,lower_bound,marginal_rate,indexing\n"
+            "2020,0,0.10,1\n"          # indexed
+            "2020,50000,0.20,0\n"       # NOT indexed
+            "2020,100000,0.30,1\n"      # indexed
         )
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", delete=False
@@ -406,7 +406,7 @@ class TestPITSchedule:
 
     def test_from_csv_missing_columns_raises(self):
         """CSV missing required columns raises ValueError."""
-        csv = "tax_year,step,lower_bound\n2020,1,0\n"
+        csv = "tax_year,lower_bound\n2020,0\n"
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", delete=False
         ) as f:
@@ -448,9 +448,9 @@ class TestPITSchedule:
     def test_from_csv_with_embedded_inflation(self):
         """CSV with embedded `inflation` column auto-extracts cpi_map."""
         csv = (
-            "tax_year,step,lower_bound,marginal_rate,indexing,inflation\n"
-            "2022,1,0,0.05,1,0.030\n"
-            "2022,2,40000,0.15,1,0.030\n"
+            "tax_year,lower_bound,marginal_rate,indexing,inflation\n"
+            "2022,0,0.05,1,0.030\n"
+            "2022,40000,0.15,1,0.030\n"
         )
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", delete=False

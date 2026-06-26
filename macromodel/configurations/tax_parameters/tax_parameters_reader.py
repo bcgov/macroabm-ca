@@ -10,15 +10,17 @@ It mirrors the pattern used by ``read_country_conf`` in
 validation layer; this reader only supplies jurisdiction- and year-specific
 values from an external, easily editable file.
 
-Scope is *scalars only*.  Progressive bracket schedules and tax-credit amount
-schedules are deliberately excluded -- they live in their own CSV files under
-``spoof_data/freda/`` and are read by ``PITSchedule`` / ``TaxCreditSchedule``.
-To enforce that boundary, :func:`read_tax_parameters` rejects any schedule
-field appearing in the YAML.
+Scope is *scalars only*.  Progressive bracket schedules, tax-credit amount
+schedules, and dividend gross-up / DTC rate schedules are deliberately
+excluded -- they live in their own CSV files under ``spoof_data/freda/`` and
+are read by ``PITSchedule`` / ``TaxCreditSchedule`` /
+``DividendTaxCreditSchedule``.  To enforce that boundary,
+:func:`read_tax_parameters` rejects any schedule field appearing in the YAML.
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,8 @@ from macromodel.configurations.central_government_configuration import (
     CentralGovernmentConfiguration,
 )
 
+logger = logging.getLogger(__name__)
+
 _TAX_PARAMS_PATH = Path(__file__).parent / "tax_parameters.yaml"
 
 # Scalar fields on CentralGovernmentConfiguration that this file may override.
@@ -35,17 +39,24 @@ _ALLOWED_FIELDS = frozenset(
     {
         "pit_dividend_integration",
         "dividend_small_business_share",
-        "dividend_eligible_gross_up",
-        "dividend_non_eligible_gross_up",
-        "dividend_eligible_dtc_rate",
-        "dividend_non_eligible_dtc_rate",
         "couple_rental_income_split",
         "pit_taxable_income_deductions",
     }
 )
 
-# Schedule fields that must NOT appear here -- they are sourced from CSVs.
-_SCHEDULE_FIELDS = frozenset({"pit_brackets", "pit_tax_credits"})
+# Schedule fields that must NOT appear here -- they are sourced from CSVs under
+# spoof_data/freda/ (PIT brackets and credit amounts via PITSchedule /
+# TaxCreditSchedule; dividend gross-up / DTC rates via DividendTaxCreditSchedule).
+_SCHEDULE_FIELDS = frozenset(
+    {
+        "pit_brackets",
+        "pit_tax_credits",
+        "dividend_eligible_gross_up",
+        "dividend_non_eligible_gross_up",
+        "dividend_eligible_dtc_rate",
+        "dividend_non_eligible_dtc_rate",
+    }
+)
 
 
 def read_tax_parameters(
@@ -67,7 +78,10 @@ def read_tax_parameters(
 
     Raises:
         FileNotFoundError: If the YAML file does not exist.
-        KeyError: If *jurisdiction* or *year* is absent from the file.
+        KeyError: If *jurisdiction* is absent, or if *year* precedes every
+            available year for the jurisdiction (no prior block to fall back
+            to).  A *year* later than the available blocks falls back to the
+            latest prior year's scalars, with a warning.
         ValueError: If a schedule field (e.g. ``pit_brackets``) appears in the
             block, or an unrecognised field name is present.
     """
@@ -85,10 +99,32 @@ def read_tax_parameters(
         )
     by_year = data[jurisdiction] or {}
     if year not in by_year:
-        raise KeyError(
-            f"Year {year} not found for jurisdiction '{jurisdiction}' in "
-            f"{yaml_path.name}. Available: {sorted(by_year)}"
+        # Fall back to the latest available year not exceeding the request.
+        # The packaged 2014 block is a demonstration default; a real run would
+        # supply the requested year's scalars.  When they are absent, reuse the
+        # latest prior year's assumptions rather than failing -- these are
+        # modelling assumptions (small-business share, rental split, the
+        # integration switch), not inflation-indexed figures, so carrying them
+        # forward is sound.  (Schedules -- brackets, credit amounts, dividend
+        # rates -- are already year-aware via CPI-indexing / year ranges, so
+        # only these scalars need a fallback.)  A year preceding every available
+        # block stays an error.
+        prior_years = [y for y in by_year if y <= year]
+        if not prior_years:
+            raise KeyError(
+                f"Year {year} precedes all available years for jurisdiction "
+                f"'{jurisdiction}' in {yaml_path.name}. Available: {sorted(by_year)}"
+            )
+        fallback_year = max(prior_years)
+        logger.warning(
+            "Tax-parameter scalars for %s %d not found in %s; falling back to "
+            "the latest available year %d.",
+            jurisdiction,
+            year,
+            yaml_path.name,
+            fallback_year,
         )
+        year = fallback_year
 
     overrides = by_year[year] or {}
 
@@ -96,8 +132,8 @@ def read_tax_parameters(
     if schedule_keys:
         raise ValueError(
             f"Schedule field(s) {sorted(schedule_keys)} found in {yaml_path.name}. "
-            "Bracket and credit schedules belong in their CSV files under "
-            "spoof_data/freda/, not in the scalar parameter file."
+            "Bracket, credit, and dividend-rate schedules belong in their CSV "
+            "files under spoof_data/freda/, not in the scalar parameter file."
         )
 
     unknown_keys = set(overrides) - _ALLOWED_FIELDS

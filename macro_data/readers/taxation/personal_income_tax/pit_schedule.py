@@ -22,42 +22,41 @@ CSV format (bracket definitions)
 The CSV must contain the following columns (case-insensitive)::
 
     tax_year      int     Base taxation year (e.g. 2014).
-    step          int     Bracket ordinal (1, 2, 3, ...).
     lower_bound   float   Nominal lower income boundary for the base year.
     marginal_rate float   Tax rate applied to income within this bracket (0–1).
     indexing      int     Flag: 1 = inflate this boundary in later years;
                           0 = keep nominal.
 
-An optional seventh column ``inflation`` may be included to supply the
+Brackets are ordered by ``lower_bound`` ascending; the row with the
+smallest ``lower_bound`` (0) is the first bracket.  Each bracket spans
+[lower_bound_k, lower_bound_{k+1}] (or [lower_bound_k, ∞) for the
+highest bracket).  No explicit bracket-ordinal column is required — the
+ordinal is implied by the sorted lower bounds (a new tax-year block
+restarts at ``lower_bound = 0``).
+
+An optional ``inflation`` column may be included to supply the
 annual CPI inflation rate directly in the CSV.  All rows for the same
 ``tax_year`` must share the same value.  When this column is present,
 ``from_csv`` automatically extracts it and no StatCan fetch is needed.
 When absent, call :meth:`from_csv_with_cpi` to pull inflation from the
 cached ``bc_cpi_inflation.csv`` or StatCan.
 
-An optional eighth column ``basic_deduction`` supplies the basic
-personal amount (non-refundable tax credit base) for the tax year.
-All rows for the same ``tax_year`` must share the same value.  The
-credit applied is ``basic_deduction × lowest_marginal_rate``, subtracted
-after the progressive calculation.  When CPI-indexing is active, this
-value is compound-inflated alongside the indexed lower bounds.
-
-A row with ``step = k`` defines bracket *k* spanning
-[lower_bound_k, lower_bound_{k+1}] (or [lower_bound_k, ∞) for the
-highest step).
+Non-refundable tax credits (including the basic personal amount) are
+supplied separately via a companion ``*_tax_credit_amount_*.csv`` file
+(see :class:`TaxCreditSchedule`), not in this bracket CSV.
 
 Example::
 
-    tax_year,step,lower_bound,marginal_rate,indexing
-    2014,1,0,0.0506,1
-    2014,2,37606,0.077,1
+    tax_year,lower_bound,marginal_rate,indexing
+    2014,0,0.0506,1
+    2014,37606,0.077,1
     ...
 
 Or with explicit inflation (no StatCan fetch needed)::
 
-    tax_year,step,lower_bound,marginal_rate,indexing,inflation
-    2014,1,0,0.0506,1,0.010
-    2014,2,37606,0.077,1,0.010
+    tax_year,lower_bound,marginal_rate,indexing,inflation
+    2014,0,0.0506,1,0.010
+    2014,37606,0.077,1,0.010
     ...
 
 CPI inflation map
@@ -110,7 +109,6 @@ from macro_data.readers.taxation.personal_income_tax.tax_credit_schedule import 
 # ── required CSV columns for bracket definitions ────────────────────
 _REQUIRED_COLS = {
     "tax_year",       # int — base year these brackets apply to
-    "step",           # int — bracket ordinal
     "lower_bound",    # float — nominal lower bound (base year)
     "marginal_rate",  # float — rate for this bracket
     "indexing",       # bool (0/1) — whether this bound is CPI-indexed
@@ -376,13 +374,11 @@ class PITSchedule:
         self,
         df: pd.DataFrame,
         cpi_map: Optional[dict[int, float]] = None,
-        basic_deduction: Optional[float] = None,
         tax_credits: Optional["TaxCreditSchedule"] = None,
     ) -> None:
         self._df = df.copy()
         self._base_year: int = int(self._df["tax_year"].iloc[0])
         self._cpi_map: dict[int, float] = dict(cpi_map) if cpi_map else {}
-        self._basic_deduction: Optional[float] = basic_deduction
         self._tax_credits: Optional["TaxCreditSchedule"] = tax_credits
 
     # ── factories ───────────────────────────────────────────────────
@@ -416,8 +412,7 @@ class PITSchedule:
                 f"Found columns: {sorted(df.columns)}"
             )
 
-        for col in ("tax_year", "step"):
-            df[col] = df[col].astype(int)
+        df["tax_year"] = df["tax_year"].astype(int)
         for col in ("lower_bound", "marginal_rate"):
             df[col] = df[col].astype(float)
         df["indexing"] = df["indexing"].astype(bool)
@@ -439,21 +434,7 @@ class PITSchedule:
                 )
             cpi_map = dict(zip(infl["tax_year"].astype(int), infl[inflation_col]))
 
-        # Optional basic_deduction column: non-refundable tax credit base.
-        basic_deduction: Optional[float] = None
-        for c in df.columns:
-            if c.lower() == "basic_deduction":
-                raw_vals = df[c].astype(str).str.replace(",", "").astype(float)
-                unique_vals = raw_vals.drop_duplicates()
-                if len(unique_vals) > 1:
-                    raise ValueError(
-                        "Inconsistent basic_deduction values: multiple rows "
-                        "for the same tax_year have different values."
-                    )
-                basic_deduction = float(unique_vals.iloc[0])
-                break
-
-        return cls(df, cpi_map=cpi_map, basic_deduction=basic_deduction)
+        return cls(df, cpi_map=cpi_map)
 
     @classmethod
     def from_name(
@@ -585,15 +566,6 @@ class PITSchedule:
         return dict(self._cpi_map)
 
     @property
-    def basic_deduction(self) -> Optional[float]:
-        """Basic personal amount (non-refundable credit base) for the base year.
-
-        Returns ``None`` when the CSV did not include a ``basic_deduction``
-        column.
-        """
-        return self._basic_deduction
-
-    @property
     def tax_credits(self) -> Optional["TaxCreditSchedule"]:
         """Tax credit schedule (multi-component), or ``None`` if not loaded.
 
@@ -602,40 +574,6 @@ class PITSchedule:
         Otherwise this is ``None`` and no tax credits are applied.
         """
         return self._tax_credits
-
-    def get_basic_deduction(self, tax_year: int) -> Optional[float]:
-        """Return the CPI-inflated basic deduction for *tax_year*.
-
-        When *tax_year* is later than :attr:`base_year`, the value is
-        compound-inflated using the same factor applied to indexed
-        lower bounds.  Returns ``None`` when no basic deduction is
-        configured.
-
-        Args:
-            tax_year: The tax year to retrieve.
-
-        Returns:
-            Inflated basic deduction, or ``None``.
-
-        Raises:
-            ValueError: If CPI data for an intermediate year is missing.
-        """
-        if self._basic_deduction is None:
-            return None
-        if tax_year <= self.base_year:
-            return self._basic_deduction
-
-        factor = 1.0
-        for y in range(self.base_year, tax_year):
-            rate = self._cpi_map.get(y)
-            if rate is None:
-                raise ValueError(
-                    f"Missing CPI inflation for year {y} "
-                    f"(needed to inflate basic_deduction {self.base_year} → {tax_year}). "
-                    f"Available years: {sorted(self._cpi_map)}"
-                )
-            factor *= 1.0 + rate
-        return self._basic_deduction * factor
 
     # ── public methods ──────────────────────────────────────────────
 
@@ -660,7 +598,9 @@ class PITSchedule:
             ValueError: If *tax_year* is before the base year or CPI
                 data for an intermediate year is missing.
         """
-        base_df = self._df.sort_values("step")
+        # Bracket order is implied by ascending lower_bound (the former
+        # explicit ``step`` column); the first bracket starts at 0.
+        base_df = self._df.sort_values("lower_bound")
 
         lower_bounds = base_df["lower_bound"].values.copy()
         marginal_rates = base_df["marginal_rate"].values.copy()
