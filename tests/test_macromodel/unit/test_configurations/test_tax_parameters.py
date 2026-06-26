@@ -204,6 +204,22 @@ class TestBuildCentralGovernmentConfiguration:
         assert config.dividend_eligible_dtc_rate == pytest.approx(0.10)
         assert config.dividend_non_eligible_dtc_rate == pytest.approx(0.0259)
 
+    def test_dividend_integration_activates_when_schedule_present(self):
+        """Presence of the dividend schedule CSV switches integration on
+        automatically, overriding the (False) YAML fallback switch."""
+        config = build_central_government_configuration("bc", 2014)
+        assert config.pit_dividend_integration is True
+
+    def test_dividend_integration_off_when_schedule_absent(self):
+        """With no dividend schedule the builder leaves integration off (legacy
+        treatment) instead of failing; the bracket schedule still builds."""
+        config = build_central_government_configuration(
+            "bc", 2014, dividend_schedule_filename="does_not_exist.csv"
+        )
+        assert config.pit_dividend_integration is False
+        # The rest of the configuration is unaffected.
+        assert config.pit_brackets[0] == (37606.0, 0.0506)
+
     def test_brackets_not_pre_scaled(self):
         """Country.from_pickled_country applies the agent-scale; the builder must
         return per-individual units, not pre-scaled ones."""

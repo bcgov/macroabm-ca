@@ -23,6 +23,16 @@ government revenue relative to the upstream flat-rate behaviour.  It is
 therefore *opt-in*: the default ``CountryConfiguration()`` stays flat, and a
 scenario must explicitly call this builder to switch BC taxation on.
 
+Dividend integration activates on schedule presence
+---------------------------------------------------
+Within this opt-in path, dividend integration (the Canadian gross-up + dividend
+tax credit) is switched on automatically when a dividend tax credit schedule
+CSV is present: the builder loads its rates and sets
+``pit_dividend_integration`` to ``True``.  When the schedule is absent the
+builder leaves integration off and firm dividends keep the legacy treatment.
+Schedule presence overrides the ``pit_dividend_integration`` switch in
+``tax_parameters.yaml``; that YAML value governs only when no schedule is found.
+
 Bracket units
 -------------
 ``pit_brackets`` are returned in *per-individual* dollar units.  The scale to
@@ -176,24 +186,50 @@ def build_central_government_configuration(
         ]
         pit_tax_credits = mapped or None
 
-    # ── Load the dividend gross-up / DTC rates for the year ──
-    dividend_schedule = DividendTaxCreditSchedule.from_name(dividend_schedule_filename)
-    dividend_rates = dividend_schedule.get_year_rates(tax_year=tax_year)
-    eligible = dividend_rates["eligible"]
-    non_eligible = dividend_rates["non_eligible"]
+    # ── Load the dividend gross-up / DTC rates for the year, if a schedule
+    #    is present.  Presence of the schedule is the activation signal: when
+    #    the file exists, dividend integration is switched on automatically and
+    #    its rates are populated; when it is absent, integration stays off and
+    #    firm dividends keep the legacy (no gross-up / no DTC) treatment.
+    dividend_updates: dict = {}
+    dividend_schedule_present = False
+    try:
+        dividend_schedule = DividendTaxCreditSchedule.from_name(
+            dividend_schedule_filename
+        )
+    except FileNotFoundError:
+        logger.info(
+            "No dividend tax credit schedule '%s' found under spoof_data/freda/; "
+            "dividend integration stays off and firm dividends keep the legacy "
+            "treatment.",
+            dividend_schedule_filename,
+        )
+    else:
+        dividend_schedule_present = True
+        dividend_rates = dividend_schedule.get_year_rates(tax_year=tax_year)
+        eligible = dividend_rates["eligible"]
+        non_eligible = dividend_rates["non_eligible"]
+        dividend_updates = {
+            "dividend_eligible_gross_up": eligible.gross_up_rate,
+            "dividend_non_eligible_gross_up": non_eligible.gross_up_rate,
+            "dividend_eligible_dtc_rate": eligible.dtc_rate_of_grossed_up,
+            "dividend_non_eligible_dtc_rate": non_eligible.dtc_rate_of_grossed_up,
+        }
 
     # ── Apply schedules, then the scalar overrides from the YAML ──
     config = base.model_copy(
         update={
             "pit_brackets": pit_brackets,
             "pit_tax_credits": pit_tax_credits,
-            "dividend_eligible_gross_up": eligible.gross_up_rate,
-            "dividend_non_eligible_gross_up": non_eligible.gross_up_rate,
-            "dividend_eligible_dtc_rate": eligible.dtc_rate_of_grossed_up,
-            "dividend_non_eligible_dtc_rate": non_eligible.dtc_rate_of_grossed_up,
+            **dividend_updates,
         }
     )
     config = apply_tax_parameters(
         config, jurisdiction=jurisdiction, year=tax_year, path=params_path
     )
+    # The dividend schedule's presence activates integration.  This is applied
+    # AFTER the YAML scalars so schedule-presence wins over the YAML switch (the
+    # YAML value governs only when no schedule is present).
+    if dividend_schedule_present:
+        config = config.model_copy(update={"pit_dividend_integration": True})
     return config

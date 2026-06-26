@@ -26,8 +26,11 @@
 bc:
   2014:
     # ── Dividend integration (Canadian gross-up + dividend tax credit) ──
-    # Master switch for the dividend block.  Kept False to preserve upstream
-    # parity; the schedule rates are ready for when it is switched on.
+    # Fallback switch, used ONLY when no dividend tax credit schedule CSV is
+    # present.  When build_central_government_configuration finds the schedule
+    # (spoof_data/freda/bc_dividend_tax_credit_schedule.csv) it activates
+    # integration automatically and this value is overridden to True.  Kept
+    # False here so the no-schedule path preserves upstream parity.
     pit_dividend_integration: false
 
     # ASSUMPTION — provisional uniform split of firm dividends into
