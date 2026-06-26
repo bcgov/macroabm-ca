@@ -46,6 +46,7 @@ from macromodel.agents.central_government.central_government import CentralGover
 from macromodel.agents.central_government.pit_pools import (
     PitContext,
     build_credit_base_pool,
+    build_dividend_tax_items,
     build_taxable_income_pool,
 )
 from macromodel.agents.firms import Firms
@@ -1478,6 +1479,28 @@ class Country:
         ind_corr_hh = self.individuals.states.get("Corresponding Household ID")
         have_child_context = ind_ages is not None and ind_corr_hh is not None
 
+        # Firm-dividend integration (off by default → both arrays stay None,
+        # the pool and credits are unchanged, full upstream parity).  When on,
+        # gross up the actual firm dividend for taxable income (pool A) and
+        # build the dividend tax credit (the 2b direct credit).  The real
+        # dividend received by households is computed separately in income.py
+        # and is not affected by these tax-only quantities.
+        grossed_up_dividend_per_ind = None
+        dividend_tax_credit_per_ind = None
+        if self.central_government.states.get("pit_dividend_integration", False):
+            gross_firm_dividend = self.individuals.compute_gross_firm_dividend(
+                firm_profits=self.firms.ts.current("profits"),
+                tau_firm=float(self.central_government.states["Profit Tax"]),
+            )
+            grossed_up_dividend_per_ind, dividend_tax_credit_per_ind = build_dividend_tax_items(
+                dividend_income=gross_firm_dividend,
+                small_business_share=float(self.central_government.states["dividend_small_business_share"]),
+                eligible_gross_up=float(self.central_government.states["dividend_eligible_gross_up"]),
+                non_eligible_gross_up=float(self.central_government.states["dividend_non_eligible_gross_up"]),
+                eligible_dtc_rate=float(self.central_government.states["dividend_eligible_dtc_rate"]),
+                non_eligible_dtc_rate=float(self.central_government.states["dividend_non_eligible_dtc_rate"]),
+            )
+
         pit_ctx = PitContext(
             employee_income=self.individuals.ts.current("employee_income"),
             employee_si_rate=float(
@@ -1485,6 +1508,7 @@ class Country:
             ),
             rental_income=rental_income_per_individual,
             financial_income=financial_income_per_individual,
+            grossed_up_dividend=grossed_up_dividend_per_ind,
             individuals_age=ind_ages,
             individuals_corr_households=ind_corr_hh,
             households_type=self.households.states.get("Type"),
@@ -1528,6 +1552,8 @@ class Country:
             current_total_exports=self.economy.ts.current("exports_before_taxes").sum(),
             taxable_income_per_ind=taxable_income_per_ind,
             credit_base_per_ind=credit_base_per_ind,
+            grossed_up_dividend_per_ind=grossed_up_dividend_per_ind,
+            direct_credits_per_ind=dividend_tax_credit_per_ind,
         )
 
         # General government fields

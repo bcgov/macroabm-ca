@@ -174,6 +174,15 @@ class CentralGovernment(Agent):
         # Couple rental income split for progressive PIT
         states["couple_rental_income_split"] = configuration.couple_rental_income_split
 
+        # Firm-dividend integration params (see CentralGovernmentConfiguration).
+        # The flag defaults False (legacy at-source treatment, upstream parity).
+        states["pit_dividend_integration"] = configuration.pit_dividend_integration
+        states["dividend_small_business_share"] = configuration.dividend_small_business_share
+        states["dividend_eligible_gross_up"] = configuration.dividend_eligible_gross_up
+        states["dividend_non_eligible_gross_up"] = configuration.dividend_non_eligible_gross_up
+        states["dividend_eligible_dtc_rate"] = configuration.dividend_eligible_dtc_rate
+        states["dividend_non_eligible_dtc_rate"] = configuration.dividend_non_eligible_dtc_rate
+
         data = (synthetic_central_government.central_gov_data.astype(float)).rename_axis("Central Government ID")
 
         ts = create_central_government_timeseries(
@@ -309,6 +318,8 @@ class CentralGovernment(Agent):
         children_under_6_per_ind: np.ndarray | None = None,
         taxable_income_per_ind: np.ndarray | None = None,
         credit_base_per_ind: np.ndarray | None = None,
+        grossed_up_dividend_per_ind: np.ndarray | None = None,
+        direct_credits_per_ind: np.ndarray | None = None,
     ) -> None:
         """Calculate all tax revenues for the current period.
 
@@ -405,6 +416,7 @@ class CentralGovernment(Agent):
                     employee_si_rate=float(self.states["Employee Social Insurance Tax"]),
                     rental_income=current_ind_rental_income,
                     financial_income=current_ind_financial_income,
+                    grossed_up_dividend=grossed_up_dividend_per_ind,
                     individuals_age=individuals_age,
                     individuals_corr_households=individuals_corr_households,
                     households_type=households_type,
@@ -421,7 +433,9 @@ class CentralGovernment(Agent):
                         ctx,
                     )
 
-            total_income_tax = self.compute_pit(taxable_income_per_ind, credit_base_per_ind)
+            total_income_tax = self.compute_pit(
+                taxable_income_per_ind, credit_base_per_ind, direct_credits_per_ind
+            )
         else:
             # --- Flat tax (backward-compatible path) ---
             total_income_tax = (
@@ -451,16 +465,24 @@ class CentralGovernment(Agent):
         self,
         taxable_income_per_ind: np.ndarray,
         credit_base_per_ind: np.ndarray | None = None,
+        direct_credits_per_ind: np.ndarray | None = None,
     ) -> float:
-        """Apply fixed PIT policy to the two assembled pools.
+        """Apply fixed PIT policy to the assembled pools.
 
         This is the government's tax *core*. It applies taxable-income
-        deductions, the progressive bracket schedule, and values the
-        credit base at the bottom marginal rate — then floors net tax at
-        zero. It never references individual income streams or credit
-        kinds, so adding either (in
+        deductions, the progressive bracket schedule, and subtracts the
+        non-refundable credits — then floors net tax at zero. It never
+        references individual income streams or credit kinds, so adding
+        either (in
         :mod:`macromodel.agents.central_government.pit_pools`) leaves this
         method untouched.
+
+        Non-refundable credit total = **2a + 2b**, both subtracted together
+        and floored at zero (excess is lost, not refunded):
+          * **2a** — ``credit_base_per_ind`` valued at the bottom marginal
+            rate (Personal/Age/Spousal/… amounts).
+          * **2b** — ``direct_credits_per_ind``, dollar-for-dollar direct
+            credits (currently the dividend tax credit).
 
         As a side effect, the scalar ``states["Income Tax"]`` effective
         rate is updated to the schedule-implied average so that
@@ -469,8 +491,10 @@ class CentralGovernment(Agent):
 
         Args:
             taxable_income_per_ind: Pool A — taxable income per individual.
-            credit_base_per_ind: Pool B — summed non-refundable credit base
-                per individual (``None`` or zeros when no credits apply).
+            credit_base_per_ind: Pool B (2a) — summed non-refundable credit
+                base per individual (``None`` or zeros when no credits apply).
+            direct_credits_per_ind: 2b — direct dollar credits per individual
+                (the dividend tax credit); ``None`` when not applicable.
 
         Returns:
             float: Total personal income tax revenue.
@@ -489,11 +513,16 @@ class CentralGovernment(Agent):
             base_for_brackets, pit_thresholds, pit_rates
         )
 
-        # Value the (non-refundable) credit base at the bottom marginal rate.
+        # Non-refundable credits: 2a (base × bottom rate) + 2b (direct dollar
+        # credits, e.g. the dividend tax credit).  Both are subtracted together
+        # and the result floored at zero, so excess non-refundable credit is
+        # lost rather than refunded.
+        total_credit = np.zeros_like(pit_per_individual, dtype=float)
         if credit_base_per_ind is not None:
-            pit_per_individual = np.maximum(
-                0.0, pit_per_individual - credit_base_per_ind * float(pit_rates[0])
-            )
+            total_credit = total_credit + credit_base_per_ind * float(pit_rates[0])
+        if direct_credits_per_ind is not None:
+            total_credit = total_credit + direct_credits_per_ind
+        pit_per_individual = np.maximum(0.0, pit_per_individual - total_credit)
 
         total_income_tax = float(pit_per_individual.sum())
 

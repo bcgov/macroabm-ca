@@ -12,8 +12,16 @@ import numpy as np
 from macromodel.agents.central_government.pit_pools import (
     PitContext,
     build_credit_base_pool,
+    build_dividend_tax_items,
     build_taxable_income_pool,
 )
+
+# 2014 BC firm-dividend integration constants (s = 0.90 provisional split).
+_S = 0.90
+_ELIG_GROSSUP = 0.38
+_NONELIG_GROSSUP = 0.18
+_ELIG_DTC = 0.10
+_NONELIG_DTC = 0.0259
 
 
 class TestTaxableIncomePool:
@@ -365,6 +373,93 @@ class TestSpousalAmountGrouping:
                 expected[members[1]] = taxable[members[0]]
 
         np.testing.assert_array_equal(spouse, expected)
+
+
+class TestDividendTaxItems:
+    """The firm-dividend gross-up + dividend tax credit (tax-only items)."""
+
+    def test_grossup_and_dtc_match_hand_calc(self):
+        # D = 100, s = 0.9 → eligible 10, non-eligible 90.
+        #   grossed eligible     = 10 × 1.38 = 13.8
+        #   grossed non-eligible = 90 × 1.18 = 106.2
+        #   grossed-up dividend  = 120.0  (= 1.20 × D)
+        #   DTC = 0.10×13.8 + 0.0259×106.2 = 1.38 + 2.75058 = 4.13058
+        grossed, dtc = build_dividend_tax_items(
+            dividend_income=np.array([100.0]),
+            small_business_share=_S,
+            eligible_gross_up=_ELIG_GROSSUP,
+            non_eligible_gross_up=_NONELIG_GROSSUP,
+            eligible_dtc_rate=_ELIG_DTC,
+            non_eligible_dtc_rate=_NONELIG_DTC,
+        )
+        np.testing.assert_allclose(grossed, [120.0])
+        np.testing.assert_allclose(dtc, [4.13058])
+
+    def test_scales_linearly_and_zero_for_non_investors(self):
+        grossed, dtc = build_dividend_tax_items(
+            dividend_income=np.array([0.0, 200.0]),
+            small_business_share=_S,
+            eligible_gross_up=_ELIG_GROSSUP,
+            non_eligible_gross_up=_NONELIG_GROSSUP,
+            eligible_dtc_rate=_ELIG_DTC,
+            non_eligible_dtc_rate=_NONELIG_DTC,
+        )
+        # Non-investor (D=0) yields zero; the other scales 2× the D=100 case.
+        np.testing.assert_allclose(grossed, [0.0, 240.0])
+        np.testing.assert_allclose(dtc, [0.0, 8.26116])
+
+    def test_all_eligible_when_share_zero(self):
+        # s = 0 → all eligible: grossed = D×1.38, DTC = 0.10×grossed.
+        grossed, dtc = build_dividend_tax_items(
+            dividend_income=np.array([100.0]),
+            small_business_share=0.0,
+            eligible_gross_up=_ELIG_GROSSUP,
+            non_eligible_gross_up=_NONELIG_GROSSUP,
+            eligible_dtc_rate=_ELIG_DTC,
+            non_eligible_dtc_rate=_NONELIG_DTC,
+        )
+        np.testing.assert_allclose(grossed, [138.0])
+        np.testing.assert_allclose(dtc, [13.8])
+
+    def test_all_non_eligible_when_share_one(self):
+        # s = 1 → all other-than-eligible: grossed = D×1.18,
+        # DTC = 0.0259 × grossed = 0.0259 × 118 = 3.0562.
+        grossed, dtc = build_dividend_tax_items(
+            dividend_income=np.array([100.0]),
+            small_business_share=1.0,
+            eligible_gross_up=_ELIG_GROSSUP,
+            non_eligible_gross_up=_NONELIG_GROSSUP,
+            eligible_dtc_rate=_ELIG_DTC,
+            non_eligible_dtc_rate=_NONELIG_DTC,
+        )
+        np.testing.assert_allclose(grossed, [118.0])
+        np.testing.assert_allclose(dtc, [3.0562])
+
+    def test_grossed_up_dividend_stacks_into_taxable_pool(self):
+        """The grossed-up dividend is a taxable-income stream like the rest."""
+        grossed, _ = build_dividend_tax_items(
+            dividend_income=np.array([100.0]),
+            small_business_share=_S,
+            eligible_gross_up=_ELIG_GROSSUP,
+            non_eligible_gross_up=_NONELIG_GROSSUP,
+            eligible_dtc_rate=_ELIG_DTC,
+            non_eligible_dtc_rate=_NONELIG_DTC,
+        )
+        ctx = PitContext(
+            employee_income=np.array([1000.0]),
+            employee_si_rate=0.0,
+            grossed_up_dividend=grossed,
+        )
+        pool = build_taxable_income_pool(ctx)
+        np.testing.assert_allclose(pool, [1120.0])  # 1000 wage + 120 grossed dividend
+
+    def test_no_dividend_leaves_pool_unchanged(self):
+        ctx = PitContext(
+            employee_income=np.array([1000.0]),
+            employee_si_rate=0.0,
+            grossed_up_dividend=None,
+        )
+        np.testing.assert_allclose(build_taxable_income_pool(ctx), [1000.0])
 
 
 class TestPoolsFeedPolicyOnce:

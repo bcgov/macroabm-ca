@@ -107,3 +107,50 @@ class CentralGovernmentConfiguration(BaseModel):
         description="Share of couple rental income to higher earner (0.5 = 50/50).",
     )
 
+    # ── Firm-dividend integration (Canadian gross-up + dividend tax credit) ──
+    # When False (default), dividends keep the legacy at-source flat treatment
+    # in income.py and never enter the PIT schedule (upstream parity).  When
+    # True, firm-investor dividends are grossed up and added to taxable income
+    # (pool A), and the dividend tax credit is added as a direct credit (the
+    # "2b" term) subtracted from gross PIT alongside the base credits.
+    #
+    # The grossed-up amount is a tax fiction used only for the income-tax and
+    # credit math; the actual dividend received by the household is unchanged.
+    #
+    # Defaults are the 2014 BC values (see spoof_data/freda/
+    # bc_dividend_tax_credit_schedule.csv) and match the scalar overrides in
+    # tax_parameters.yaml, so applying that file to a default config is a no-op.
+    # Bank dividends are out of scope here (different federal rules) and keep
+    # the legacy treatment.
+    pit_dividend_integration: bool = Field(
+        default=False,
+        description="Enable Canadian dividend gross-up + dividend tax credit for firm dividends.",
+    )
+    dividend_small_business_share: float = Field(
+        default=0.90,
+        ge=0.0,
+        le=1.0,
+        description="Share s of dividends treated as other-than-eligible (small-business "
+        "rate income); (1 - s) is eligible. Provisional uniform split per firm.",
+    )
+    dividend_eligible_gross_up: float = Field(
+        default=0.38,
+        ge=0.0,
+        description="Gross-up rate for eligible dividends (0.38 => taxable = 1.38 x cash).",
+    )
+    dividend_non_eligible_gross_up: float = Field(
+        default=0.18,
+        ge=0.0,
+        description="Gross-up rate for other-than-eligible dividends (2014: 0.18 => 1.18 x cash).",
+    )
+    dividend_eligible_dtc_rate: float = Field(
+        default=0.10,
+        ge=0.0,
+        description="BC dividend tax credit on the grossed-up eligible dividend (2014: 0.10).",
+    )
+    dividend_non_eligible_dtc_rate: float = Field(
+        default=0.0259,
+        ge=0.0,
+        description="BC dividend tax credit on the grossed-up other-than-eligible dividend (2014: 0.0259).",
+    )
+

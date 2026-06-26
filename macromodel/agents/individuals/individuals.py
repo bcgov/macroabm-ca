@@ -333,6 +333,40 @@ class Individuals(Agent):
             )
         ).astype(float)
 
+    def compute_gross_firm_dividend(
+        self,
+        firm_profits: np.ndarray,
+        tau_firm: float,
+    ) -> np.ndarray:
+        """Per-individual gross firm dividend ``D_i`` (before personal tax).
+
+        The actual after-corporate-tax dividend a ``FIRM_INVESTOR`` receives:
+        ``payout_ratio × (1 − tau_firm) × max(0, firm_profits[invested_firm])``;
+        zero for everyone else.  This is the *real* dividend (the household's
+        cash) — the income-tax gross-up and dividend tax credit are derived
+        from it separately and never change it.  Mirrors the firm-investor
+        term in :meth:`compute_income` but without the at-source income-tax
+        haircut (that haircut is replaced by the PIT schedule when dividend
+        integration is enabled).
+
+        Args:
+            firm_profits: Current profit per firm.
+            tau_firm: Flat corporate (profit) tax rate.
+
+        Returns:
+            Gross dividend per individual.
+        """
+        activity = self.states["Activity Status"]
+        dividend = np.zeros(len(activity), dtype=float)
+        firm_inv = activity == ActivityStatus.FIRM_INVESTOR
+        corr = self.states["Corresponding Invested Firm"][firm_inv].astype(int)
+        dividend[firm_inv] = (
+            self.states["Dividend Payout Ratio"]
+            * (1.0 - tau_firm)
+            * np.maximum(0.0, firm_profits[corr])
+        )
+        return dividend
+
     def update_demography(self) -> None:
         """Update demographic variables for individuals."""
         self.ts.n_individuals.append(self.functions["demography"].update(self.ts.current("n_individuals")))

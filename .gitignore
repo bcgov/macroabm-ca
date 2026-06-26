@@ -168,3 +168,6 @@ local_validation/
 output/
 output_old/
 raw_data/
+
+# Personal memory sync artifact (secret-gist snapshot, local only)
+memory.md

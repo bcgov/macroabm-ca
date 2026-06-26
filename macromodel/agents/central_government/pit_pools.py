@@ -46,6 +46,11 @@ class PitContext:
     employee_si_rate: float
     rental_income: np.ndarray | None = None
     financial_income: np.ndarray | None = None
+    # Grossed-up firm dividend (tax fiction): the eligible/non-eligible
+    # gross-up of the actual dividend, used ONLY for taxable income and the
+    # dividend tax credit.  The real dividend received is unchanged.  None
+    # when dividend integration is off.
+    grossed_up_dividend: np.ndarray | None = None
 
     # ── household / demographic context (tax-credit eligibility) ──
     individuals_age: np.ndarray | None = None
@@ -80,11 +85,63 @@ def build_taxable_income_pool(ctx: PitContext) -> np.ndarray:
         pool = pool + ctx.rental_income
     if ctx.financial_income is not None:
         pool = pool + ctx.financial_income
+    if ctx.grossed_up_dividend is not None:
+        # Grossed-up dividend (CRA line 12000): the taxable amount of
+        # dividends.  Notional — the household receives only the un-grossed
+        # cash; this term exists purely to tax dividends at the schedule.
+        pool = pool + ctx.grossed_up_dividend
 
     # pool = pool + ctx.pension_income            # ← example: new stream
     # pool = pool + ctx.capital_gains * 0.5       # ← example: inclusion rate
 
     return pool
+
+
+def build_dividend_tax_items(
+    dividend_income: np.ndarray,
+    small_business_share: float,
+    eligible_gross_up: float,
+    non_eligible_gross_up: float,
+    eligible_dtc_rate: float,
+    non_eligible_dtc_rate: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Turn the actual per-individual dividend into its two tax-only items.
+
+    Implements the Canadian gross-up + dividend tax credit for *firm*
+    dividends, with a provisional uniform split: a share ``s`` of each
+    individual's dividend is treated as **other-than-eligible** (paid out of
+    small-business-rate income) and ``1 - s`` as **eligible** (general-rate
+    income).  Each portion is grossed up at its own rate, and the dividend
+    tax credit is that grossed-up amount valued at its own DTC rate.
+
+    The returned grossed-up amount maps to CRA worksheet 5000-D1 line 12000;
+    the credit maps to BC428 line 61520 (``grossed_elig × elig_rate +
+    grossed_non_elig × non_elig_rate``).  Neither changes the actual dividend
+    received — they feed only the taxable-income pool and the credit pool.
+
+    Args:
+        dividend_income: Actual dividend received per individual (``D_i``).
+        small_business_share: ``s`` — other-than-eligible share (0..1).
+        eligible_gross_up: Gross-up rate for eligible dividends (0.38 → ×1.38).
+        non_eligible_gross_up: Gross-up rate for other-than-eligible (0.18 → ×1.18).
+        eligible_dtc_rate: DTC rate on grossed-up eligible dividends.
+        non_eligible_dtc_rate: DTC rate on grossed-up other-than-eligible.
+
+    Returns:
+        ``(grossed_up_dividend, dividend_tax_credit)`` per individual.
+    """
+    eligible = (1.0 - small_business_share) * dividend_income
+    non_eligible = small_business_share * dividend_income
+
+    grossed_eligible = eligible * (1.0 + eligible_gross_up)
+    grossed_non_eligible = non_eligible * (1.0 + non_eligible_gross_up)
+
+    grossed_up_dividend = grossed_eligible + grossed_non_eligible
+    dividend_tax_credit = (
+        eligible_dtc_rate * grossed_eligible
+        + non_eligible_dtc_rate * grossed_non_eligible
+    )
+    return grossed_up_dividend, dividend_tax_credit
 
 
 def build_credit_base_pool(

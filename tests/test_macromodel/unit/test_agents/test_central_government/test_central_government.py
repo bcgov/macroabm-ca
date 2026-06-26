@@ -376,6 +376,82 @@ class TestCentralGovernmentPIT:
         total = cg.compute_pit(taxable, huge_credit_base)
         assert total == pytest.approx(0.0)
 
+    def test_compute_pit_subtracts_direct_credits_2b(self, test_central_government_pit):
+        """2b direct credits (the dividend tax credit) are subtracted from
+        gross tax in addition to the 2a base credits."""
+        cg = test_central_government_pit
+        taxable = np.array([40000.0])
+        gross = compute_progressive_tax(
+            taxable, cg.states["pit_thresholds"], cg.states["pit_rates"],
+        ).sum()
+
+        credit_base = np.array([1000.0])    # 2a base
+        direct_credit = np.array([250.0])   # 2b dividend tax credit
+        net = cg.compute_pit(taxable, credit_base, direct_credit)
+
+        expected = gross - 1000.0 * float(cg.states["pit_rates"][0]) - 250.0
+        assert net == pytest.approx(expected)
+
+    def test_compute_pit_direct_credit_floored_with_base(self, test_central_government_pit):
+        """2a + 2b are floored together — a large direct credit can't refund."""
+        cg = test_central_government_pit
+        taxable = np.array([20000.0])
+        gross = compute_progressive_tax(
+            taxable, cg.states["pit_thresholds"], cg.states["pit_rates"],
+        ).sum()
+        net = cg.compute_pit(taxable, np.zeros(1), np.array([gross + 5000.0]))
+        assert net == pytest.approx(0.0)
+
+    def test_compute_pit_direct_credit_alone(self, test_central_government_pit):
+        """A 2b direct credit applies even when there is no 2a base."""
+        cg = test_central_government_pit
+        taxable = np.array([40000.0])
+        gross = compute_progressive_tax(
+            taxable, cg.states["pit_thresholds"], cg.states["pit_rates"],
+        ).sum()
+        net = cg.compute_pit(taxable, None, np.array([300.0]))
+        assert net == pytest.approx(gross - 300.0)
+
+    def test_dividend_integration_raises_pit_via_compute_taxes(self, test_central_government_pit):
+        """Routing a grossed-up dividend + DTC through compute_taxes taxes the
+        grossed-up amount (net of the credit), raising PIT revenue."""
+        cg = test_central_government_pit
+        emp = np.array([50000.0])
+        base_kwargs = dict(
+            current_total_rent_paid=0.0,
+            current_income_financial_assets=np.zeros(1),
+            current_ind_activity=np.array([ActivityStatus.EMPLOYED]),
+            current_ind_realised_cons=np.zeros(1),
+            current_bank_profits=np.zeros(1),
+            current_firm_production=np.zeros(1),
+            current_firm_price=np.ones(1),
+            current_firm_profits=np.zeros(1),
+            current_firm_industries=np.zeros(1, dtype=int),
+            current_household_new_real_wealth=np.zeros(1),
+            taxes_less_subsidies_rates=np.zeros(1),
+            current_total_exports=0.0,
+        )
+        cg.compute_taxes(current_ind_employee_income=emp, **base_kwargs)
+        tax_no_div = cg.ts.get_aggregate("taxes_income")[-1]
+
+        cg.compute_taxes(
+            current_ind_employee_income=emp,
+            grossed_up_dividend_per_ind=np.array([120.0]),  # grossed-up D=100, s=0.9
+            direct_credits_per_ind=np.array([4.13058]),     # the matching DTC
+            **base_kwargs,
+        )
+        tax_with_div = cg.ts.get_aggregate("taxes_income")[-1]
+
+        # Exact: the grossed-up 120 stacks onto the wage taxable base, then the
+        # DTC is subtracted.  (This fixture has no 2a credits or deductions.)
+        si = float(cg.states["Employee Social Insurance Tax"])
+        taxable = emp * (1 - si) + 120.0
+        gross = compute_progressive_tax(
+            taxable, cg.states["pit_thresholds"], cg.states["pit_rates"],
+        ).sum()
+        assert tax_with_div == pytest.approx(gross - 4.13058)
+        assert tax_with_div > tax_no_div
+
     def test_no_credits_noop(self, test_central_government_pit):
         """Without pit_tax_credits, gross tax = net tax (no credits)."""
         cg = test_central_government_pit
