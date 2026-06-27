@@ -1,12 +1,20 @@
 """Integration tests for the bank-dividend → PIT pipeline.
 
-Covers three layers:
+Covers four layers:
   1. Pool arithmetic — ``build_dividend_tax_items`` with ``small_business_share``
      variations, and how the grossed-up result enters ``build_taxable_income_pool``.
   2. End-to-end revenue — ``CentralGovernment.compute_taxes`` with a bank
      dividend present raises PIT revenue and matches the manual schedule.
   3. States propagation — ``bank_dividend_small_business_share`` flows from
      ``CentralGovernmentConfiguration`` into ``CentralGovernment.states``.
+  4. Country-level wiring — the full chain from raw bank profits through
+     ``Individuals.compute_gross_bank_dividend`` and ``build_dividend_tax_items``
+     (reading ``cg.states["bank_dividend_small_business_share"]``) to PIT revenue.
+     Regression guard: uses a bank share (0.25) distinct from the firm share (0.9)
+     so any key confusion produces a numerically different result.
+     Limitation: does not call ``Country.update_realised_metrics`` directly
+     (the method is too large to run in isolation); a future test at the
+     simulation level would be needed to catch country.py key-read regressions.
 """
 
 import numpy as np
@@ -38,6 +46,32 @@ def _bank_items(dividend_income, small_business_share):
         non_eligible_gross_up=_NONELIG_GU,
         eligible_dtc_rate=_ELIG_DTC,
         non_eligible_dtc_rate=_NONELIG_DTC,
+    )
+
+
+def _build_cg_with_integration(datawrapper, bank_share, firm_share=0.9):
+    """Build a CG with PIT dividend integration and distinct firm/bank shares."""
+    from macromodel.agents.central_government import CentralGovernment
+    from macromodel.configurations import CentralGovernmentConfiguration
+
+    country = datawrapper.synthetic_countries["FRA"]
+    taxes_ls = country.industry_data["industry_vectors"]["Taxes Less Subsidies Rates"].values
+
+    config = CentralGovernmentConfiguration(
+        pit_brackets=[(float("inf"), 0.10)],
+        pit_dividend_integration=True,
+        dividend_small_business_share=firm_share,
+        bank_dividend_small_business_share=bank_share,
+    )
+    return CentralGovernment.from_pickled_agent(
+        synthetic_central_government=country.central_government,
+        configuration=config,
+        country_name="FRA",
+        all_country_names=["FRA", "ROW"],
+        taxes_net_subsidies=taxes_ls,
+        tax_data=country.tax_data,
+        n_industries=datawrapper.n_industries,
+        number_of_unemployed_individuals=1,
     )
 
 
@@ -195,7 +229,7 @@ class TestBankDividendPITRevenue:
 # 3. States propagation
 # ---------------------------------------------------------------------------
 
-class TestBankDividendStatePropagate:
+class TestBankDividendStatePropagation:
     """bank_dividend_small_business_share flows from config into CG states."""
 
     def test_default_share_zero_in_states(self, test_central_government_pit):
@@ -206,24 +240,118 @@ class TestBankDividendStatePropagate:
 
     def test_explicit_share_propagates(self, datawrapper):
         """A non-default share set in config reaches states unchanged."""
-        from macromodel.agents.central_government import CentralGovernment
-        from macromodel.configurations import CentralGovernmentConfiguration
-
-        country = datawrapper.synthetic_countries["FRA"]
-        taxes_ls = country.industry_data["industry_vectors"]["Taxes Less Subsidies Rates"].values
-
-        config = CentralGovernmentConfiguration(
-            pit_brackets=[(float("inf"), 0.10)],
-            bank_dividend_small_business_share=0.25,
-        )
-        cg = CentralGovernment.from_pickled_agent(
-            synthetic_central_government=country.central_government,
-            configuration=config,
-            country_name="FRA",
-            all_country_names=["FRA", "ROW"],
-            taxes_net_subsidies=taxes_ls,
-            tax_data=country.tax_data,
-            n_industries=datawrapper.n_industries,
-            number_of_unemployed_individuals=0,
-        )
+        cg = _build_cg_with_integration(datawrapper, bank_share=0.25)
         assert cg.states["bank_dividend_small_business_share"] == pytest.approx(0.25)
+
+
+# ---------------------------------------------------------------------------
+# 4. Country-level wiring: bank profits → gross dividend → grossed-up + DTC
+# ---------------------------------------------------------------------------
+
+class TestBankDividendCountryWiring:
+    """Full chain from raw bank profits to PIT revenue, reading from CG states.
+
+    Uses bank_share=0.25 (non-default) and firm_share=0.9 (different) so that
+    any key confusion (e.g. using dividend_small_business_share for banks)
+    produces a numerically different gross-up and DTC.
+    """
+
+    _BANK_PROFIT = 2_000.0
+    _PAYOUT = 0.5
+    _BANK_SHARE = 0.25
+
+    def test_bank_profits_to_grossed_up_dividend(self, test_individuals, datawrapper):
+        """compute_gross_bank_dividend → build_dividend_tax_items produces values
+        consistent with the bank share from CG states, not the firm share."""
+        ind = test_individuals
+        ind.states["Activity Status"] = np.array([ActivityStatus.BANK_INVESTOR])
+        ind.states["Corresponding Invested Bank"] = np.array([0])
+        ind.states["Dividend Payout Ratio"] = self._PAYOUT
+
+        cg = _build_cg_with_integration(datawrapper, bank_share=self._BANK_SHARE)
+        tau_firm = float(cg.states["Profit Tax"])
+        bank_profits = np.array([self._BANK_PROFIT])
+
+        # Replicate country.py: compute_gross_bank_dividend → build_dividend_tax_items
+        gross_bank_div = ind.compute_gross_bank_dividend(bank_profits, tau_firm)
+        grossed_up, dtc = build_dividend_tax_items(
+            dividend_income=gross_bank_div,
+            small_business_share=float(cg.states["bank_dividend_small_business_share"]),
+            eligible_gross_up=float(cg.states["dividend_eligible_gross_up"]),
+            non_eligible_gross_up=float(cg.states["dividend_non_eligible_gross_up"]),
+            eligible_dtc_rate=float(cg.states["dividend_eligible_dtc_rate"]),
+            non_eligible_dtc_rate=float(cg.states["dividend_non_eligible_dtc_rate"]),
+        )
+
+        # Reviewer's formula:
+        cash_div = self._PAYOUT * (1.0 - tau_firm) * self._BANK_PROFIT
+        expected_grossed = cash_div * (
+            self._BANK_SHARE * (1.0 + _NONELIG_GU)
+            + (1.0 - self._BANK_SHARE) * (1.0 + _ELIG_GU)
+        )
+        expected_dtc = (
+            self._BANK_SHARE * cash_div * (1.0 + _NONELIG_GU) * _NONELIG_DTC
+            + (1.0 - self._BANK_SHARE) * cash_div * (1.0 + _ELIG_GU) * _ELIG_DTC
+        )
+
+        np.testing.assert_allclose(grossed_up, [expected_grossed], rtol=1e-9)
+        np.testing.assert_allclose(dtc, [expected_dtc], rtol=1e-9)
+
+        # Sanity check: result must differ from what the firm share (0.9) would give,
+        # proving the bank-specific key was used.
+        wrong_grossed = cash_div * (
+            0.9 * (1.0 + _NONELIG_GU) + 0.1 * (1.0 + _ELIG_GU)
+        )
+        assert not np.allclose(grossed_up, [wrong_grossed]), (
+            "gross-up matched the firm share — bank_dividend_small_business_share was not used"
+        )
+
+    def test_bank_profits_to_pit_revenue(self, test_individuals, datawrapper):
+        """Full chain from bank profits to PIT revenue matches the reviewer's formula."""
+        from macro_data.readers.taxation.personal_income_tax.pit_schedule import (
+            compute_progressive_tax,
+        )
+
+        ind = test_individuals
+        ind.states["Activity Status"] = np.array([ActivityStatus.BANK_INVESTOR])
+        ind.states["Corresponding Invested Bank"] = np.array([0])
+        ind.states["Dividend Payout Ratio"] = self._PAYOUT
+
+        cg = _build_cg_with_integration(datawrapper, bank_share=self._BANK_SHARE)
+        tau_firm = float(cg.states["Profit Tax"])
+        si_rate = float(cg.states["Employee Social Insurance Tax"])
+        bank_profits = np.array([self._BANK_PROFIT])
+
+        gross_bank_div = ind.compute_gross_bank_dividend(bank_profits, tau_firm)
+        grossed_up, dtc = build_dividend_tax_items(
+            dividend_income=gross_bank_div,
+            small_business_share=float(cg.states["bank_dividend_small_business_share"]),
+            eligible_gross_up=float(cg.states["dividend_eligible_gross_up"]),
+            non_eligible_gross_up=float(cg.states["dividend_non_eligible_gross_up"]),
+            eligible_dtc_rate=float(cg.states["dividend_eligible_dtc_rate"]),
+            non_eligible_dtc_rate=float(cg.states["dividend_non_eligible_dtc_rate"]),
+        )
+
+        emp_income = np.array([0.0])  # no wage income — isolates the dividend path
+        taxable = emp_income * (1.0 - si_rate) + grossed_up
+        pit_gross = compute_progressive_tax(taxable, cg.states["pit_thresholds"], cg.states["pit_rates"])
+        expected_revenue = float(np.maximum(0.0, pit_gross - dtc).sum())
+
+        cg.compute_taxes(
+            current_ind_employee_income=emp_income,
+            current_total_rent_paid=0.0,
+            current_income_financial_assets=np.zeros(1),
+            current_ind_activity=np.array([ActivityStatus.BANK_INVESTOR]),
+            current_ind_realised_cons=np.zeros(1),
+            current_bank_profits=bank_profits,
+            current_firm_production=np.zeros(1),
+            current_firm_price=np.ones(1),
+            current_firm_profits=np.zeros(1),
+            current_firm_industries=np.zeros(1, dtype=int),
+            current_household_new_real_wealth=np.zeros(1),
+            taxes_less_subsidies_rates=np.zeros(1),
+            grossed_up_dividend_per_ind=grossed_up,
+            direct_credits_per_ind=dtc,
+        )
+        actual_revenue = cg.ts.get_aggregate("taxes_income")[-1]
+        assert actual_revenue == pytest.approx(expected_revenue, rel=1e-9)
