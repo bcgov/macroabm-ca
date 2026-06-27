@@ -53,6 +53,7 @@ class IncomeSetter(ABC):
         dividend_payout_ratio: float,
         income_taxes: float,
         tau_firm: float,
+        dividend_income_taxes: float | None = None,
     ) -> np.ndarray:
         """Calculate expected future income for individuals.
 
@@ -88,6 +89,7 @@ class IncomeSetter(ABC):
         dividend_payout_ratio: float,
         income_taxes: float,
         tau_firm: float,
+        dividend_income_taxes: float | None = None,
     ) -> np.ndarray:
         """Calculate current period income for individuals.
 
@@ -103,6 +105,10 @@ class IncomeSetter(ABC):
             dividend_payout_ratio (float): Share of profits paid as dividends
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            dividend_income_taxes: Override income-tax rate for investor dividends.
+                Pass 0.0 when PIT dividend integration is active to suppress the
+                at-source flat haircut (replaced by the progressive PIT schedule).
+                Defaults to ``income_taxes`` when None.
 
         Returns:
             np.ndarray: Current income by individual
@@ -140,6 +146,7 @@ class DefaultIncomeSetter(IncomeSetter):
         dividend_payout_ratio: float,
         income_taxes: float,
         tau_firm: float,
+        dividend_income_taxes: float | None = None,
     ) -> np.ndarray:
         """Calculate expected future income for individuals.
 
@@ -165,10 +172,16 @@ class DefaultIncomeSetter(IncomeSetter):
             dividend_payout_ratio (float): Share of profits paid as dividends
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            dividend_income_taxes: Override income-tax rate for investor dividends.
+                Pass 0.0 when PIT dividend integration is active to suppress the
+                at-source flat haircut (replaced by the progressive PIT schedule).
+                Defaults to ``income_taxes`` when None.
 
         Returns:
             np.ndarray: Expected income by individual
         """
+        div_tax = income_taxes if dividend_income_taxes is None else dividend_income_taxes
+
         income = np.zeros_like(current_individual_activity_status)
 
         # Employed individuals
@@ -187,7 +200,7 @@ class DefaultIncomeSetter(IncomeSetter):
         firm_inv_ind = current_individual_activity_status == ActivityStatus.FIRM_INVESTOR
         income[firm_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
+            * (1 - div_tax)
             * (1 - tau_firm)
             * np.maximum(0.0, expected_firm_profits[corr_invested_firms[firm_inv_ind]])
         )
@@ -196,7 +209,7 @@ class DefaultIncomeSetter(IncomeSetter):
         bank_inv_ind = current_individual_activity_status == ActivityStatus.BANK_INVESTOR
         income[bank_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
+            * (1 - div_tax)
             * (1 - tau_firm)
             * np.maximum(0.0, expected_bank_profits[corr_invested_banks[bank_inv_ind]])
         )
@@ -215,6 +228,7 @@ class DefaultIncomeSetter(IncomeSetter):
         dividend_payout_ratio: float,
         income_taxes: float,
         tau_firm: float,
+        dividend_income_taxes: float | None = None,
     ) -> np.ndarray:
         """Calculate current period income for individuals.
 
@@ -238,10 +252,16 @@ class DefaultIncomeSetter(IncomeSetter):
             dividend_payout_ratio (float): Share of profits paid as dividends
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            dividend_income_taxes: Override income-tax rate for investor dividends.
+                Pass 0.0 when PIT dividend integration is active to suppress the
+                at-source flat haircut (replaced by the progressive PIT schedule).
+                Defaults to ``income_taxes`` when None.
 
         Returns:
             np.ndarray: Current income by individual
         """
+        div_tax = income_taxes if dividend_income_taxes is None else dividend_income_taxes
+
         income = np.zeros_like(current_individual_activity_status)
 
         # Employed individuals
@@ -260,7 +280,7 @@ class DefaultIncomeSetter(IncomeSetter):
         firm_inv_ind = current_individual_activity_status == ActivityStatus.FIRM_INVESTOR
         income[firm_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
+            * (1 - div_tax)
             * (1 - tau_firm)
             * np.maximum(0.0, firm_profits[corr_invested_firms[firm_inv_ind].astype(int)])
         )
@@ -269,7 +289,7 @@ class DefaultIncomeSetter(IncomeSetter):
         bank_inv_ind = current_individual_activity_status == ActivityStatus.BANK_INVESTOR
         income[bank_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
+            * (1 - div_tax)
             * (1 - tau_firm)
             * np.maximum(0.0, bank_profits[corr_invested_banks[bank_inv_ind].astype(int)])
         )

@@ -249,6 +249,7 @@ class Individuals(Agent):
         expected_inflation: float,
         income_taxes: float,
         tau_firm: float,
+        dividend_income_taxes: float | None = None,
     ) -> np.ndarray:
         """Calculate expected future income for individuals.
 
@@ -286,6 +287,7 @@ class Individuals(Agent):
                 dividend_payout_ratio=self.states["Dividend Payout Ratio"],
                 income_taxes=income_taxes,
                 tau_firm=tau_firm,
+                dividend_income_taxes=dividend_income_taxes,
             )
         ).astype(float)
 
@@ -296,6 +298,7 @@ class Individuals(Agent):
         cpi: float,
         income_taxes: float,
         tau_firm: float,
+        dividend_income_taxes: float | None = None,
     ) -> np.ndarray:
         """Calculate current period income for individuals.
 
@@ -330,6 +333,7 @@ class Individuals(Agent):
                 dividend_payout_ratio=self.states["Dividend Payout Ratio"],
                 income_taxes=income_taxes,
                 tau_firm=tau_firm,
+                dividend_income_taxes=dividend_income_taxes,
             )
         ).astype(float)
 
@@ -376,9 +380,11 @@ class Individuals(Agent):
 
         The actual after-corporate-tax dividend a ``BANK_INVESTOR`` receives:
         ``payout_ratio × (1 − tau_firm) × max(0, bank_profits[invested_bank])``;
-        zero for everyone else.  Banks pay only eligible dividends
-        (``small_business_share = 0``).  Mirrors
-        :meth:`compute_gross_firm_dividend` for bank investors.
+        zero for everyone else.  Mirrors :meth:`compute_gross_firm_dividend`
+        for bank investors.  The eligible/non-eligible split is governed by
+        ``bank_dividend_small_business_share`` (default 0.0 — definitional, as
+        banks are always taxed at the general corporate rate) and is applied
+        downstream in :func:`~macromodel.agents.central_government.pit_pools.build_dividend_tax_items`.
 
         Args:
             bank_profits: Current profit per bank.

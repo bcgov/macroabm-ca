@@ -795,6 +795,7 @@ class Country:
         )
 
         # Individual income
+        _div_integration = self.central_government.states.get("pit_dividend_integration", False)
         self.individuals.ts.expected_income.append(
             self.individuals.compute_expected_income(
                 expected_firm_profits=self.firms.ts.current("expected_profits"),
@@ -803,6 +804,7 @@ class Country:
                 expected_inflation=self.economy.ts.current("estimated_cpi_inflation")[0],
                 income_taxes=self.central_government.states["Income Tax"],
                 tau_firm=self.central_government.states["Profit Tax"],
+                dividend_income_taxes=0.0 if _div_integration else None,
             )
         )
 
@@ -1316,6 +1318,7 @@ class Country:
 
         # E1. INDIVIDUAL AND HOUSEHOLD INCOME
         # Update individual income components
+        _div_integration = self.central_government.states.get("pit_dividend_integration", False)
         self.individuals.ts.income.append(
             self.individuals.compute_income(
                 firm_profits=self.firms.ts.current("profits"),
@@ -1323,6 +1326,7 @@ class Country:
                 cpi=self.economy.ts.current("cpi")[0],
                 income_taxes=self.central_government.states["Income Tax"],
                 tau_firm=self.central_government.states["Profit Tax"],
+                dividend_income_taxes=0.0 if _div_integration else None,
             )
         )
         self.individuals.ts.income_histogram.append(get_histogram(self.individuals.ts.current("income"), self.scale))
