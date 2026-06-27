@@ -174,10 +174,11 @@ class CentralGovernment(Agent):
         # Couple rental income split for progressive PIT
         states["couple_rental_income_split"] = configuration.couple_rental_income_split
 
-        # Firm-dividend integration params (see CentralGovernmentConfiguration).
+        # Dividend integration params (see CentralGovernmentConfiguration).
         # The flag defaults False (legacy at-source treatment, upstream parity).
         states["pit_dividend_integration"] = configuration.pit_dividend_integration
         states["dividend_small_business_share"] = configuration.dividend_small_business_share
+        states["bank_dividend_small_business_share"] = configuration.bank_dividend_small_business_share
         states["dividend_eligible_gross_up"] = configuration.dividend_eligible_gross_up
         states["dividend_non_eligible_gross_up"] = configuration.dividend_non_eligible_gross_up
         states["dividend_eligible_dtc_rate"] = configuration.dividend_eligible_dtc_rate

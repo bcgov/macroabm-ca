@@ -39,6 +39,7 @@ _ALLOWED_FIELDS = frozenset(
     {
         "pit_dividend_integration",
         "dividend_small_business_share",
+        "bank_dividend_small_business_share",
         "couple_rental_income_split",
         "pit_taxable_income_deductions",
     }
