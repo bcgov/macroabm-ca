@@ -38,6 +38,10 @@ bc:
     # as other-than-eligible; (1 - s) is eligible.
     dividend_small_business_share: 0.90
 
+    # Banks are taxed at the general corporate rate; all bank dividends are
+    # eligible (s = 0 is definitional, not an assumption).
+    bank_dividend_small_business_share: 0.0
+
     # NOTE — the published gross-up and dividend-tax-credit rates are NOT scalars
     # here.  They vary by year and dividend type and live in the schedule CSV
     # spoof_data/freda/bc_dividend_tax_credit_schedule.csv, read by

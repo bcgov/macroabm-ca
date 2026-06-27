@@ -367,6 +367,37 @@ class Individuals(Agent):
         )
         return dividend
 
+    def compute_gross_bank_dividend(
+        self,
+        bank_profits: np.ndarray,
+        tau_firm: float,
+    ) -> np.ndarray:
+        """Per-individual gross bank dividend ``D_i`` (before personal tax).
+
+        The actual after-corporate-tax dividend a ``BANK_INVESTOR`` receives:
+        ``payout_ratio × (1 − tau_firm) × max(0, bank_profits[invested_bank])``;
+        zero for everyone else.  Banks pay only eligible dividends
+        (``small_business_share = 0``).  Mirrors
+        :meth:`compute_gross_firm_dividend` for bank investors.
+
+        Args:
+            bank_profits: Current profit per bank.
+            tau_firm: Flat corporate (profit) tax rate.
+
+        Returns:
+            Gross dividend per individual.
+        """
+        activity = self.states["Activity Status"]
+        dividend = np.zeros(len(activity), dtype=float)
+        bank_inv = activity == ActivityStatus.BANK_INVESTOR
+        corr = self.states["Corresponding Invested Bank"][bank_inv].astype(int)
+        dividend[bank_inv] = (
+            self.states["Dividend Payout Ratio"]
+            * (1.0 - tau_firm)
+            * np.maximum(0.0, bank_profits[corr])
+        )
+        return dividend
+
     def update_demography(self) -> None:
         """Update demographic variables for individuals."""
         self.ts.n_individuals.append(self.functions["demography"].update(self.ts.current("n_individuals")))

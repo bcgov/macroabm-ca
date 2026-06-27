@@ -1479,27 +1479,42 @@ class Country:
         ind_corr_hh = self.individuals.states.get("Corresponding Household ID")
         have_child_context = ind_ages is not None and ind_corr_hh is not None
 
-        # Firm-dividend integration (off by default → both arrays stay None,
+        # Dividend integration (off by default → both arrays stay None,
         # the pool and credits are unchanged, full upstream parity).  When on,
-        # gross up the actual firm dividend for taxable income (pool A) and
-        # build the dividend tax credit (the 2b direct credit).  The real
-        # dividend received by households is computed separately in income.py
-        # and is not affected by these tax-only quantities.
+        # gross up both firm and bank dividends for taxable income (pool A) and
+        # build the dividend tax credits (the 2b direct credit).  The real
+        # dividends received by households are computed separately in income.py
+        # and are not affected by these tax-only quantities.
         grossed_up_dividend_per_ind = None
         dividend_tax_credit_per_ind = None
         if self.central_government.states.get("pit_dividend_integration", False):
-            gross_firm_dividend = self.individuals.compute_gross_firm_dividend(
-                firm_profits=self.firms.ts.current("profits"),
-                tau_firm=float(self.central_government.states["Profit Tax"]),
-            )
-            grossed_up_dividend_per_ind, dividend_tax_credit_per_ind = build_dividend_tax_items(
-                dividend_income=gross_firm_dividend,
-                small_business_share=float(self.central_government.states["dividend_small_business_share"]),
+            tau_firm = float(self.central_government.states["Profit Tax"])
+            gross_up_kwargs = dict(
                 eligible_gross_up=float(self.central_government.states["dividend_eligible_gross_up"]),
                 non_eligible_gross_up=float(self.central_government.states["dividend_non_eligible_gross_up"]),
                 eligible_dtc_rate=float(self.central_government.states["dividend_eligible_dtc_rate"]),
                 non_eligible_dtc_rate=float(self.central_government.states["dividend_non_eligible_dtc_rate"]),
             )
+            gross_firm_dividend = self.individuals.compute_gross_firm_dividend(
+                firm_profits=self.firms.ts.current("profits"),
+                tau_firm=tau_firm,
+            )
+            grossed_up_firm, dtc_firm = build_dividend_tax_items(
+                dividend_income=gross_firm_dividend,
+                small_business_share=float(self.central_government.states["dividend_small_business_share"]),
+                **gross_up_kwargs,
+            )
+            gross_bank_dividend = self.individuals.compute_gross_bank_dividend(
+                bank_profits=self.banks.ts.current("profits"),
+                tau_firm=tau_firm,
+            )
+            grossed_up_bank, dtc_bank = build_dividend_tax_items(
+                dividend_income=gross_bank_dividend,
+                small_business_share=float(self.central_government.states["bank_dividend_small_business_share"]),
+                **gross_up_kwargs,
+            )
+            grossed_up_dividend_per_ind = grossed_up_firm + grossed_up_bank
+            dividend_tax_credit_per_ind = dtc_firm + dtc_bank
 
         pit_ctx = PitContext(
             employee_income=self.individuals.ts.current("employee_income"),

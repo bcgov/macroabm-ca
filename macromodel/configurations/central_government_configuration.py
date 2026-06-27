@@ -107,12 +107,13 @@ class CentralGovernmentConfiguration(BaseModel):
         description="Share of couple rental income to higher earner (0.5 = 50/50).",
     )
 
-    # ── Firm-dividend integration (Canadian gross-up + dividend tax credit) ──
+    # ── Dividend integration (Canadian gross-up + dividend tax credit) ──
     # When False (default), dividends keep the legacy at-source flat treatment
     # in income.py and never enter the PIT schedule (upstream parity).  When
-    # True, firm-investor dividends are grossed up and added to taxable income
-    # (pool A), and the dividend tax credit is added as a direct credit (the
-    # "2b" term) subtracted from gross PIT alongside the base credits.
+    # True, both firm-investor and bank-investor dividends are grossed up and
+    # added to taxable income (pool A), and the dividend tax credit is added as
+    # a direct credit (the "2b" term) subtracted from gross PIT alongside the
+    # base credits.
     #
     # The grossed-up amount is a tax fiction used only for the income-tax and
     # credit math; the actual dividend received by the household is unchanged.
@@ -122,18 +123,23 @@ class CentralGovernmentConfiguration(BaseModel):
     # the schedule CSV spoof_data/freda/bc_dividend_tax_credit_schedule.csv (read
     # by DividendTaxCreditSchedule) and applied by
     # build_central_government_configuration; they are not YAML scalars.
-    # Bank dividends are out of scope here (different federal rules) and keep
-    # the legacy treatment.
     pit_dividend_integration: bool = Field(
         default=False,
-        description="Enable Canadian dividend gross-up + dividend tax credit for firm dividends.",
+        description="Enable Canadian dividend gross-up + dividend tax credit for firm and bank dividends.",
     )
     dividend_small_business_share: float = Field(
         default=0.90,
         ge=0.0,
         le=1.0,
-        description="Share s of dividends treated as other-than-eligible (small-business "
+        description="Share s of firm dividends treated as other-than-eligible (small-business "
         "rate income); (1 - s) is eligible. Provisional uniform split per firm.",
+    )
+    bank_dividend_small_business_share: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Share s of bank dividends treated as other-than-eligible. Banks are taxed "
+        "at the general corporate rate so all their dividends are eligible (s = 0).",
     )
     dividend_eligible_gross_up: float = Field(
         default=0.38,
