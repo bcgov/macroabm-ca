@@ -39,7 +39,6 @@ The credit *kind* string is mapped to eligibility rules internally:
     ``CPP Amount``        *(deferred — requires contribution data)*
     ``EI Amount``         *(deferred — requires contribution data)*
     ``Pension Income…``   *(deferred — requires pension income data)*
-    ``Child Amount…``     *(deferred — requires child agents)*
     ==================== ===============================================
 
 CPI inflation
@@ -79,8 +78,6 @@ _ELIGIBILITY_RULES: dict[str, dict[str, object]] = {
     "Pension Income Amount":    {"has_eligible_pension_income": True},  # NOT age-based: CPP may start 60-70 and the credit also covers non-CPP pension income; requires pension-income data the model lacks, so it is deferred (skipped) rather than proxied by age
     "Spousal Amount":           {"in_couple_household": True},          # married / common-law
     "Equivalent To Spouse Amount": {"is_single_parent": True},         # single parent / caregiver
-    "Child Amount Under 18":    {"num_children_under_18_min": 1},      # parent
-    "Child Amount Under 6":     {"num_children_under_6_min": 1},       # parent
 }
 
 
@@ -233,24 +230,21 @@ class TaxCreditSchedule:
     def from_name(
         cls,
         filename: str,
+        schedule_dir: Path,
         cpi_map: Optional[dict[int, float]] = None,
-        schedule_dir: Optional[Path] = None,
     ) -> "TaxCreditSchedule":
-        """Load by filename from the schedule directory.
+        """Load by filename from *schedule_dir*.
 
         Args:
             filename: CSV filename (e.g. ``"bc_tax_credit_amount_2014.csv"``).
+            schedule_dir: Directory holding the schedule CSVs — typically
+                ``raw_data_path / "taxation" / "personal_income_tax"``.
             cpi_map: Optional CPI inflation map.
-            schedule_dir: Override the default ``spoof_data/freda/`` directory.
 
         Returns:
             Configured ``TaxCreditSchedule``.
         """
-        if schedule_dir is None:
-            schedule_dir = (
-                Path(__file__).resolve().parent.parent.parent.parent.parent
-                / "spoof_data" / "freda"
-            )
+        schedule_dir = Path(schedule_dir)
         path = schedule_dir / filename
         if not path.exists():
             raise FileNotFoundError(
@@ -324,8 +318,6 @@ def is_eligible_for_credit(
     age: Optional[float] = None,
     gender: Optional[int] = None,
     employee_income: Optional[float] = None,
-    num_children_under_18: Optional[int] = None,
-    num_children_under_6: Optional[int] = None,
     in_couple_household: Optional[bool] = None,
     is_single_parent: Optional[bool] = None,
 ) -> bool:
@@ -339,10 +331,6 @@ def is_eligible_for_credit(
         age: Individual's age (required if eligibility has ``age_min``).
         gender: Individual's gender (required if eligibility has ``gender``).
         employee_income: Individual's income (required for future clawback).
-        num_children_under_18: Number of children under 18 in the individual's
-            household (required for ``num_children_under_18_min``).
-        num_children_under_6: Number of children under 6 in the individual's
-            household (required for ``num_children_under_6_min``).
         in_couple_household: Whether the individual lives in a couple
             household (required for ``in_couple_household``).
         is_single_parent: Whether the individual is a single parent
@@ -357,14 +345,6 @@ def is_eligible_for_credit(
 
     if "age_min" in rules and (age is None or age < rules["age_min"]):
         return False
-
-    if "num_children_under_18_min" in rules:
-        if num_children_under_18 is None or num_children_under_18 < rules["num_children_under_18_min"]:
-            return False
-
-    if "num_children_under_6_min" in rules:
-        if num_children_under_6 is None or num_children_under_6 < rules["num_children_under_6_min"]:
-            return False
 
     if "in_couple_household" in rules and not in_couple_household:
         return False

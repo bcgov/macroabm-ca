@@ -6,8 +6,10 @@ dividend type (``eligible`` / ``non_eligible``).
 
 These are published statutory rates that change across years, so they form a
 *schedule* (a multi-row, year-ranged table) rather than a scalar modelling
-assumption.  They are therefore kept in a CSV under ``spoof_data/freda/``
-alongside the PIT bracket and tax-credit schedules, not in
+assumption.  They are therefore kept in a CSV in the taxation directory
+(``raw_data_path / "taxation" / "personal_income_tax"``, with
+``spoof_data/freda/personal_income_tax`` as the committed
+fallback) alongside the PIT bracket and tax-credit schedules, not in
 ``tax_parameters.yaml`` (which holds scalar assumptions only).
 
 CSV format
@@ -56,12 +58,6 @@ _DTC_REQUIRED_COLS = {
 
 # ── recognised dividend types ─────────────────────────────────────────
 _DIVIDEND_TYPES = ("eligible", "non_eligible")
-
-# ── default schedule directory (repo-root/spoof_data/freda) ───────────
-_SCHEDULE_DIR = (
-    Path(__file__).resolve().parent.parent.parent.parent.parent
-    / "spoof_data" / "freda"
-)
 
 
 @dataclass(frozen=True)
@@ -146,13 +142,14 @@ class DividendTaxCreditSchedule:
     def from_name(
         cls,
         filename: str,
-        schedule_dir: Optional[Path] = None,
+        schedule_dir: Path,
     ) -> "DividendTaxCreditSchedule":
-        """Load the schedule by filename from the schedule directory.
+        """Load the schedule by filename from *schedule_dir*.
 
         Args:
             filename: CSV filename (e.g. ``"bc_dividend_tax_credit_schedule.csv"``).
-            schedule_dir: Override the default ``spoof_data/freda/`` directory.
+            schedule_dir: Directory holding the schedule CSVs — typically
+                ``raw_data_path / "taxation" / "personal_income_tax"``.
 
         Returns:
             A configured ``DividendTaxCreditSchedule``.
@@ -160,7 +157,7 @@ class DividendTaxCreditSchedule:
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        directory = schedule_dir if schedule_dir is not None else _SCHEDULE_DIR
+        directory = Path(schedule_dir)
         path = directory / filename
         if not path.exists():
             raise FileNotFoundError(

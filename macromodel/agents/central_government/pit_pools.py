@@ -57,8 +57,6 @@ class PitContext:
     individuals_corr_households: np.ndarray | None = None
     households_type: np.ndarray | None = None
     households_n_adults: np.ndarray | None = None
-    children_under_18_per_ind: np.ndarray | None = None
-    children_under_6_per_ind: np.ndarray | None = None
 
 
 def build_taxable_income_pool(ctx: PitContext) -> np.ndarray:
@@ -319,16 +317,6 @@ def _credit_amount(
         if household.is_single_parent is None:
             return zeros
         return np.where(household.is_single_parent, amount, 0.0)
-
-    # ── Per-child credits: amount is per eligible child ──
-    if kind == "Child Amount Under 18":
-        if ctx.children_under_18_per_ind is None:
-            return zeros
-        return amount * ctx.children_under_18_per_ind
-    if kind == "Child Amount Under 6":
-        if ctx.children_under_6_per_ind is None:
-            return zeros
-        return amount * ctx.children_under_6_per_ind
 
     # ── Other age-gated credits (age_min set, not Age Amount) ──
     if age_min is not None:

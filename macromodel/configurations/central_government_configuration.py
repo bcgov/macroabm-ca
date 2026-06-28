@@ -47,6 +47,19 @@ class CentralGovernmentFunctions(BaseModel):
 class CentralGovernmentConfiguration(BaseModel):
     functions: CentralGovernmentFunctions = CentralGovernmentFunctions()
 
+    # Opt-in switch for this government's progressive PIT.  When True AND the
+    # country carries taxation data (``SyntheticCountry.taxation``), the run
+    # builds the progressive schedule (brackets, credits, dividend rates) onto
+    # this config from that data; when False (default) the flat ``Income Tax``
+    # scalar is used (upstream parity).  It is a *per-government* flag, so when
+    # the model gains multiple government agents each opts in independently and
+    # is matched to its own jurisdiction's schedules.
+    activate_progressive_pit: bool = Field(
+        default=False,
+        description="Opt in to progressive PIT for this government, built from "
+        "the country's taxation data. False keeps the flat Income Tax rate.",
+    )
+
     # Progressive Personal Income Tax schedule.
     # Each tuple is (bracket_upper_bound, marginal_rate).
     # The last bound should be float("inf") for the top bracket.
@@ -120,8 +133,9 @@ class CentralGovernmentConfiguration(BaseModel):
     #
     # The field defaults below are the 2014 BC values, kept so a bare config is
     # self-consistent.  In a real run the gross-up and DTC rates are sourced from
-    # the schedule CSV spoof_data/freda/bc_dividend_tax_credit_schedule.csv (read
-    # by DividendTaxCreditSchedule) and applied by
+    # the schedule CSV bc_dividend_tax_credit_schedule.csv in the taxation
+    # directory (raw_data_path/"taxation", spoof_data/freda fallback; read by
+    # DividendTaxCreditSchedule) and applied by
     # build_central_government_configuration; they are not YAML scalars.
     pit_dividend_integration: bool = Field(
         default=False,

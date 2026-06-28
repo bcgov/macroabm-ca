@@ -91,15 +91,6 @@ class TestTargetedCreditsRequireContext:
         base = build_credit_base_pool(credit_defs, taxable, ctx)
         np.testing.assert_array_equal(base, [0.0, 0.0])
 
-    def test_child_credits_without_child_context_are_zero(self):
-        ctx = self._bare_ctx()
-        taxable = build_taxable_income_pool(ctx)
-        for kind in ("Child Amount Under 18", "Child Amount Under 6"):
-            base = build_credit_base_pool(
-                [{"kind": kind, "amount": 100.0}], taxable, ctx
-            )
-            np.testing.assert_array_equal(base, [0.0, 0.0])
-
     def test_universal_credit_still_applies_without_context(self):
         """A genuinely universal credit (Personal Amount) is unaffected."""
         ctx = self._bare_ctx()
@@ -150,28 +141,6 @@ class TestCreditBasePool:
         base = build_credit_base_pool(credit_defs, taxable, ctx)
         # Person 0: personal + age; person 1: personal only.
         np.testing.assert_allclose(base, [1500.0, 1000.0])
-
-    def test_child_credit_scales_per_child(self):
-        taxable = np.array([40000.0, 40000.0])
-        ctx = PitContext(
-            employee_income=taxable,
-            employee_si_rate=0.0,
-            children_under_18_per_ind=np.array([0, 3]),
-        )
-        credit_defs = [{"kind": "Child Amount Under 18", "amount": 100.0}]
-        base = build_credit_base_pool(credit_defs, taxable, ctx)
-        np.testing.assert_allclose(base, [0.0, 300.0])
-
-    def test_child_amount_under_6_scales_per_child(self):
-        taxable = np.array([40000.0, 40000.0])
-        ctx = PitContext(
-            employee_income=taxable,
-            employee_si_rate=0.0,
-            children_under_6_per_ind=np.array([0, 2]),
-        )
-        credit_defs = [{"kind": "Child Amount Under 6", "amount": 200.0}]
-        base = build_credit_base_pool(credit_defs, taxable, ctx)
-        np.testing.assert_allclose(base, [0.0, 400.0])
 
     def test_equivalent_to_spouse_amount_single_parent_only(self):
         """The eligible-dependant credit applies only to single parents."""

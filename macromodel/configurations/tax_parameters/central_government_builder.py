@@ -4,10 +4,13 @@ This module is the one place that builds a fully-populated
 :class:`~macromodel.configurations.central_government_configuration.CentralGovernmentConfiguration`
 for a real run.  It combines the two sources of tax inputs the project adds:
 
-1. **Schedules** (multi-row, year-ranged tables) read from CSV files under
-   ``spoof_data/freda/`` via ``PITSchedule`` / ``TaxCreditSchedule`` /
-   ``DividendTaxCreditSchedule`` — the progressive bracket schedule, the
-   non-refundable tax-credit amounts, and the dividend gross-up / DTC rates.
+1. **Schedules** (multi-row, year-ranged tables) supplied as a loaded
+   :class:`~macro_data.readers.taxation.TaxationReader` — the progressive bracket
+   schedule, its companion non-refundable tax-credit amounts, and the dividend
+   gross-up / DTC rates.  The reader is built by ``DataReaders.from_raw_data``
+   from ``raw_data_path / "taxation" / "personal_income_tax"`` (mirroring the
+   energy-sector readers); the builder consumes it rather than resolving paths
+   itself.
 2. **Scalars** (single-value assumptions) read from ``tax_parameters.yaml`` via
    :func:`apply_tax_parameters` — the dividend-integration switch, the
    small-business share, and the couple rental-income split.
@@ -18,10 +21,11 @@ agent units), ``pit_tax_credits``, and the scalar fields.
 
 Opt-in by design
 ----------------
-Calling this builder activates the progressive PIT schedule, which changes
-government revenue relative to the upstream flat-rate behaviour.  It is
-therefore *opt-in*: the default ``CountryConfiguration()`` stays flat, and a
-scenario must explicitly call this builder to switch BC taxation on.
+Supplying a ``TaxationReader`` activates the progressive PIT schedule, which
+changes government revenue relative to the upstream flat-rate behaviour.  It is
+therefore *opt-in*: when no reader is supplied (taxation data absent) the base
+(flat) configuration is returned unchanged, and a scenario must pass a reader to
+switch BC taxation on.
 
 Dividend integration activates on schedule presence
 ---------------------------------------------------
@@ -45,12 +49,10 @@ The runtime credit pool (``pit_pools._credit_amount``) dispatches by credit
 ``kind`` and already implements universal, age-based, couple (Spousal Amount,
 income-tested) and single-parent (Equivalent To Spouse Amount) credits, deriving
 the household context per individual.  This builder therefore carries those
-kinds.  Credits whose eligibility the runtime does not yet evaluate (the
-per-child amounts, which require child-count context that is not always present)
-are *skipped* and logged rather than silently applied to everyone.  The
-allow-list below must stay in step with the ``kind`` branches in
-``_credit_amount``: a key is admitted here only once the runtime can apply the
-credit it gates.
+kinds.  Credits whose eligibility the runtime does not yet evaluate are
+*skipped* and logged rather than silently applied to everyone.  The allow-list
+below must stay in step with the ``kind`` branches in ``_credit_amount``: a key
+is admitted here only once the runtime can apply the credit it gates.
 """
 
 from __future__ import annotations
@@ -67,6 +69,7 @@ from macromodel.configurations.central_government_configuration import (
 from .tax_parameters_reader import apply_tax_parameters
 
 if TYPE_CHECKING:
+    from macro_data.readers.taxation import TaxationReader
     from macro_data.readers.taxation.personal_income_tax.tax_credit_schedule import (
         TaxCreditComponent,
     )
@@ -79,8 +82,6 @@ logger = logging.getLogger(__name__)
 #   age_min            -> Age Amount (and other age-gated credits)
 #   in_couple_household -> Spousal Amount (income-tested against the spouse)
 #   is_single_parent   -> Equivalent To Spouse Amount
-# The per-child keys (num_children_under_*) are intentionally absent: the runtime
-# branch exists but requires child-count context, so those remain deferred.
 _EXPRESSIBLE_ELIGIBILITY_KEYS = frozenset(
     {"age_min", "in_couple_household", "is_single_parent"}
 )
@@ -115,65 +116,91 @@ def _credit_component_to_def(component: TaxCreditComponent) -> Optional[TaxCredi
     )
 
 
+def activate_taxation(
+    base_config: CentralGovernmentConfiguration,
+    taxation_reader: Optional["TaxationReader"],
+    tax_year: int,
+    params_path: str | Path | None = None,
+) -> CentralGovernmentConfiguration:
+    """Layer a government's progressive PIT schedules onto its config, if opted in.
+
+    This is the macromodel-side consumption seam for ``SyntheticCountry.taxation``:
+    given one government's *base_config* and the taxation reader for its taxing
+    authority, it returns the progressive config when the government has opted in
+    (``base_config.activate_progressive_pit``) and a reader is available, and the
+    unchanged *base_config* (flat parity) otherwise.
+
+    It is deliberately **per-government and jurisdiction-keyed** — it acts on a
+    single config and reads the jurisdiction from ``taxation_reader.jurisdiction``
+    rather than assuming a particular government.  A future model with multiple
+    government agents calls this once per government, each with its own config and
+    its jurisdiction's reader; nothing here presumes a single central government.
+
+    Args:
+        base_config: The government's configuration (its non-tax fields are
+            preserved when schedules are layered on).
+        taxation_reader: The taxation schedules for this government's authority,
+            or ``None`` when the country carries no taxation data.
+        tax_year: Tax year for which to compute brackets / credits / dividend rates.
+        params_path: Optional override for the scalar YAML file location.
+
+    Returns:
+        The progressive config when opted in with data present, else *base_config*.
+    """
+    if not base_config.activate_progressive_pit or taxation_reader is None:
+        return base_config
+    return build_central_government_configuration(
+        taxation_reader,
+        jurisdiction=taxation_reader.jurisdiction,
+        tax_year=tax_year,
+        params_path=params_path,
+        base_config=base_config,
+    )
+
+
 def build_central_government_configuration(
+    taxation_reader: Optional["TaxationReader"] = None,
     jurisdiction: str = "bc",
     tax_year: int = 2014,
-    schedule_filename: Optional[str] = None,
-    dividend_schedule_filename: Optional[str] = None,
     params_path: str | Path | None = None,
     base_config: Optional[CentralGovernmentConfiguration] = None,
 ) -> CentralGovernmentConfiguration:
-    """Assemble a central-government configuration from CSV schedules + YAML scalars.
+    """Assemble a central-government configuration from loaded schedules + YAML scalars.
+
+    The taxation schedules arrive as a :class:`~macro_data.readers.taxation.TaxationReader`
+    built by ``DataReaders.from_raw_data`` (mirroring the energy-sector readers).
+    When no reader is supplied (taxation data absent), progressive PIT is *not*
+    activated and the base (flat) configuration is returned unchanged, preserving
+    upstream parity.
 
     Args:
-        jurisdiction: Jurisdiction key, used both for the default schedule
-            filenames and to look up the scalar block in ``tax_parameters.yaml``.
+        taxation_reader: Loaded personal-income-tax schedules, or ``None`` when no
+            taxation data is present.  ``None`` ⇒ the base config is returned
+            unchanged (flat tax, no progressive PIT).
+        jurisdiction: Jurisdiction key for the scalar-block lookup in
+            ``tax_parameters.yaml``.
         tax_year: Tax year for which to compute the (CPI-indexed) brackets and
             credit amounts, select the dividend rates, and key the scalar lookup.
-        schedule_filename: PIT bracket CSV under ``spoof_data/freda/``.  Defaults
-            to ``f"{jurisdiction}_pit_2014.csv"`` (the base-year file; later years
-            are reached by CPI-indexing that file).  The companion
-            ``*_tax_credit_amount_*.csv`` is auto-discovered by ``PITSchedule``.
-        dividend_schedule_filename: Dividend gross-up / DTC rate CSV under
-            ``spoof_data/freda/``.  Defaults to
-            ``f"{jurisdiction}_dividend_tax_credit_schedule.csv"``.  The row
-            covering *tax_year* supplies the per-type gross-up and DTC rates.
         params_path: Optional override for the scalar YAML file location.
         base_config: Optional base configuration whose non-tax fields (functions,
             social benefits) are preserved.  Defaults to a fresh
             ``CentralGovernmentConfiguration()``.
 
     Returns:
-        A ``CentralGovernmentConfiguration`` with ``pit_brackets``,
-        ``pit_tax_credits`` and the dividend gross-up / DTC rates populated from
-        the schedules, and the remaining scalar fields overridden from the YAML.
+        A ``CentralGovernmentConfiguration``: when a reader is supplied, with
+        ``pit_brackets``, ``pit_tax_credits`` and the dividend gross-up / DTC
+        rates populated from the schedules and the scalar fields overridden from
+        the YAML; otherwise the unmodified base (flat) configuration.
     """
-    # Deferred imports: the data-layer schedule readers (and pandas) load only
-    # when a config is actually built, so importing this package for the config
-    # schema alone stays light.  This keeps the configurations layer free of an
-    # import-time dependency on macro_data, matching the runtime-deferral pattern
-    # used elsewhere (e.g. pit_pools._household_context, Firms.from_configuration).
-    from macro_data.readers.taxation.personal_income_tax.dividend_tax_credit_schedule import (
-        DividendTaxCreditSchedule,
-    )
-    from macro_data.readers.taxation.personal_income_tax.pit_schedule import (
-        PITSchedule,
-    )
-
-    if schedule_filename is None:
-        schedule_filename = f"{jurisdiction}_pit_2014.csv"
-    if dividend_schedule_filename is None:
-        dividend_schedule_filename = f"{jurisdiction}_dividend_tax_credit_schedule.csv"
-
     base = base_config if base_config is not None else CentralGovernmentConfiguration()
 
-    # ── Load the bracket schedule (and its companion credit schedule) ──
-    # For the base year no CPI is needed; later years require the CPI map to
-    # compound-inflate indexed bounds, so use the CPI-aware factory then.
-    schedule = PITSchedule.from_name(schedule_filename)
-    if tax_year > schedule.base_year:
-        schedule = PITSchedule.from_name_with_cpi(schedule_filename)
+    # No taxation data ⇒ progressive PIT is not activated; return the base (flat)
+    # configuration unchanged.  This keeps the default path at upstream parity.
+    if taxation_reader is None:
+        return base
 
+    # ── Brackets (and the companion credit schedule carried by the reader) ──
+    schedule = taxation_reader.pit_schedule
     thresholds, rates, _, _ = schedule.get_brackets(tax_year=tax_year)
     pit_brackets = [(float(t), float(r)) for t, r in zip(thresholds, rates)]
 
@@ -186,27 +213,15 @@ def build_central_government_configuration(
         ]
         pit_tax_credits = mapped or None
 
-    # ── Load the dividend gross-up / DTC rates for the year, if a schedule
-    #    is present.  Presence of the schedule is the activation signal: when
-    #    the file exists, dividend integration is switched on automatically and
-    #    its rates are populated; when it is absent, integration stays off and
-    #    firm dividends keep the legacy (no gross-up / no DTC) treatment.
+    # ── Dividend gross-up / DTC rates: present on the reader ⇒ integration on ──
+    # The dividend schedule's presence is the activation signal; when it is absent
+    # integration stays off and firm dividends keep the legacy treatment.
     dividend_updates: dict = {}
-    dividend_schedule_present = False
-    try:
-        dividend_schedule = DividendTaxCreditSchedule.from_name(
-            dividend_schedule_filename
+    dividend_schedule_present = taxation_reader.dividend_schedule is not None
+    if dividend_schedule_present:
+        dividend_rates = taxation_reader.dividend_schedule.get_year_rates(
+            tax_year=tax_year
         )
-    except FileNotFoundError:
-        logger.info(
-            "No dividend tax credit schedule '%s' found under spoof_data/freda/; "
-            "dividend integration stays off and firm dividends keep the legacy "
-            "treatment.",
-            dividend_schedule_filename,
-        )
-    else:
-        dividend_schedule_present = True
-        dividend_rates = dividend_schedule.get_year_rates(tax_year=tax_year)
         eligible = dividend_rates["eligible"]
         non_eligible = dividend_rates["non_eligible"]
         dividend_updates = {

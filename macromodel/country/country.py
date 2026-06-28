@@ -54,7 +54,7 @@ from macromodel.agents.government_entities.government_entities import Government
 from macromodel.agents.households.households import Households
 from macromodel.agents.individuals.individual_properties import ActivityStatus
 from macromodel.agents.individuals.individuals import Individuals
-from macromodel.configurations import CountryConfiguration
+from macromodel.configurations import CountryConfiguration, activate_taxation
 from macromodel.economy.economy import Economy
 from macromodel.exchange_rates import ExchangeRates
 from macromodel.exogenous.exogenous import Exogenous
@@ -63,39 +63,6 @@ from macromodel.markets.housing_market.housing_market import HousingMarket
 from macromodel.markets.labour_market.labour_market import LabourMarket
 from macromodel.rest_of_the_world import RestOfTheWorld
 from macromodel.util.get_histogram import get_histogram
-
-
-def _compute_children_per_individual(
-    individual_ages: np.ndarray,
-    corr_households: np.ndarray,
-    age_cutoff: int,
-) -> np.ndarray:
-    """Count children below *age_cutoff* in each individual's household.
-
-    Each **adult** in a household reports the same child count (the
-    household's total children below the cutoff).  Children themselves
-    report 0 (they are not adding credit bases for themselves).
-
-    Args:
-        individual_ages: Shape (n_ind,).  Age of every individual.
-        corr_households: Shape (n_ind,).  Household ID per individual.
-        age_cutoff: Strict upper age bound (e.g. 18 or 6).
-
-    Returns:
-        Shape (n_ind,).  Number of children below *age_cutoff* in the
-        individual's household.  Zero for individuals below the cutoff
-        themselves.
-    """
-    n_ind = len(individual_ages)
-    children_per_hh = np.bincount(
-        corr_households.astype(int),
-        weights=(individual_ages < age_cutoff).astype(float),
-        minlength=corr_households.max() + 1,
-    )
-    result = children_per_hh[corr_households.astype(int)]
-    # Children themselves don't claim the credit
-    result[individual_ages < age_cutoff] = 0
-    return result
 
 
 class Country:
@@ -358,6 +325,18 @@ class Country:
 
         n_unemployed = (individuals.states["Activity Status"] == ActivityStatus.UNEMPLOYED).sum()
 
+        # Consume the country's taxation schedules: when this government opted in
+        # (activate_progressive_pit) and the country carries taxation data, layer
+        # the progressive PIT schedule (brackets, credits, dividend rates) onto
+        # its config; otherwise the flat config is used unchanged (parity).  This
+        # is per-government and jurisdiction-keyed (see activate_taxation), so it
+        # extends to multiple government agents without change here.
+        central_government_config = activate_taxation(
+            base_config=country_configuration.central_government,
+            taxation_reader=synthetic_country.taxation,
+            tax_year=initial_year,
+        )
+
         # Scale PIT bracket thresholds to agent-level income units.
         # Each synthetic agent represents *scale* real people, so a
         # $50k bracket for individuals becomes $50k × scale for agents.
@@ -365,7 +344,6 @@ class Country:
         # caller-owned configuration, which may be reused across repeated
         # Country construction or calibration loops (otherwise the brackets
         # would be multiplied again on every reuse).
-        central_government_config = country_configuration.central_government
         if central_government_config.pit_brackets is not None and scale > 1:
             central_government_config = deepcopy(central_government_config)
             central_government_config.pit_brackets = [
@@ -397,7 +375,6 @@ class Country:
         if pit_thresholds is not None and pit_rates is not None:
             ind_ages = individuals.states.get("Age")
             ind_corr_hh = individuals.states.get("Corresponding Household ID")
-            have_hh = ind_ages is not None and ind_corr_hh is not None
 
             # Processing phase: assemble Pool A (taxable income) and Pool B
             # (credit base) on the synthetic employee-income distribution,
@@ -411,14 +388,6 @@ class Country:
                 individuals_corr_households=ind_corr_hh,
                 households_type=households.states.get("Type"),
                 households_n_adults=households.states.get("Number of Adults"),
-                children_under_18_per_ind=(
-                    _compute_children_per_individual(ind_ages, ind_corr_hh, 18)
-                    if have_hh else None
-                ),
-                children_under_6_per_ind=(
-                    _compute_children_per_individual(ind_ages, ind_corr_hh, 6)
-                    if have_hh else None
-                ),
             )
             taxable_pool = build_taxable_income_pool(pit_ctx)
             credit_pool = build_credit_base_pool(
@@ -1481,7 +1450,6 @@ class Country:
 
         ind_ages = self.individuals.states.get("Age")
         ind_corr_hh = self.individuals.states.get("Corresponding Household ID")
-        have_child_context = ind_ages is not None and ind_corr_hh is not None
 
         # Dividend integration (off by default → both arrays stay None,
         # the pool and credits are unchanged, full upstream parity).  When on,
@@ -1532,14 +1500,6 @@ class Country:
             individuals_corr_households=ind_corr_hh,
             households_type=self.households.states.get("Type"),
             households_n_adults=self.households.states.get("Number of Adults"),
-            children_under_18_per_ind=(
-                _compute_children_per_individual(ind_ages, ind_corr_hh, 18)
-                if have_child_context else None
-            ),
-            children_under_6_per_ind=(
-                _compute_children_per_individual(ind_ages, ind_corr_hh, 6)
-                if have_child_context else None
-            ),
         )
         taxable_income_per_ind = build_taxable_income_pool(pit_ctx)
         credit_base_per_ind = build_credit_base_pool(

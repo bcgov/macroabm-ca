@@ -12,8 +12,9 @@ values from an external, easily editable file.
 
 Scope is *scalars only*.  Progressive bracket schedules, tax-credit amount
 schedules, and dividend gross-up / DTC rate schedules are deliberately
-excluded -- they live in their own CSV files under ``spoof_data/freda/`` and
-are read by ``PITSchedule`` / ``TaxCreditSchedule`` /
+excluded -- they live in their own CSV files in the taxation directory
+(``raw_data_path / "taxation"``, with ``spoof_data/freda`` as the committed
+fallback) and are read by ``PITSchedule`` / ``TaxCreditSchedule`` /
 ``DividendTaxCreditSchedule``.  To enforce that boundary,
 :func:`read_tax_parameters` rejects any schedule field appearing in the YAML.
 """
@@ -45,9 +46,10 @@ _ALLOWED_FIELDS = frozenset(
     }
 )
 
-# Schedule fields that must NOT appear here -- they are sourced from CSVs under
-# spoof_data/freda/ (PIT brackets and credit amounts via PITSchedule /
-# TaxCreditSchedule; dividend gross-up / DTC rates via DividendTaxCreditSchedule).
+# Schedule fields that must NOT appear here -- they are sourced from CSVs in the
+# taxation directory (raw_data_path/"taxation", spoof_data/freda fallback): PIT
+# brackets and credit amounts via PITSchedule / TaxCreditSchedule; dividend
+# gross-up / DTC rates via DividendTaxCreditSchedule.
 _SCHEDULE_FIELDS = frozenset(
     {
         "pit_brackets",
@@ -134,7 +136,8 @@ def read_tax_parameters(
         raise ValueError(
             f"Schedule field(s) {sorted(schedule_keys)} found in {yaml_path.name}. "
             "Bracket, credit, and dividend-rate schedules belong in their CSV "
-            "files under spoof_data/freda/, not in the scalar parameter file."
+            "files in the taxation directory (raw_data_path/'taxation', "
+            "spoof_data/freda fallback), not in the scalar parameter file."
         )
 
     unknown_keys = set(overrides) - _ALLOWED_FIELDS

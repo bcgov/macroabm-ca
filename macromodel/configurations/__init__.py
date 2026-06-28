@@ -44,6 +44,7 @@ from .labour_market_configuration import LabourMarketConfiguration
 from .row_configuration import RestOfTheWorldConfiguration
 from .simulation_configuration import SimulationConfiguration
 from .tax_parameters import (
+    activate_taxation,
     apply_tax_parameters,
     build_central_government_configuration,
     read_tax_parameters,

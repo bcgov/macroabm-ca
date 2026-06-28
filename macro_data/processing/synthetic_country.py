@@ -112,6 +112,7 @@ from macro_data.readers.emission_fraction.emission_fraction_reader import Emissi
 from macro_data.readers.emissions.emissions_reader import CH4EmissionsDataCAN, EmissionsData
 from macro_data.readers.exo_prices.exo_prices_reader import SectorExoPrices
 from macro_data.readers.exogenous_data import ExogenousCountryData
+from macro_data.readers.taxation import TaxationReader
 
 
 @dataclass
@@ -175,6 +176,12 @@ class SyntheticCountry:
     firm_exo_prices: Optional[SectorExoPrices] = None
     emission_factors_ch4: Optional[CH4EmissionsDataCAN] = None
     historical_emissions_df: Optional[pd.DataFrame] = None
+    # Personal-income-tax schedules for this country's taxing authority, carried
+    # across the pickle boundary so the macromodel layer can build the
+    # central-government PIT config from it (the builder, a macromodel object,
+    # cannot be called here — macro_data must not depend on macromodel).
+    # ``None`` when no taxation data is present (progressive PIT stays off).
+    taxation: Optional[TaxationReader] = None
 
     @classmethod
     def eu_synthetic_country(
@@ -378,6 +385,7 @@ class SyntheticCountry:
             firm_exo_prices=(
                 SectorExoPrices.from_reader(readers.exo_prices) if readers.exo_prices is not None else None
             ),
+            taxation=readers.taxation,
         )
 
     @classmethod

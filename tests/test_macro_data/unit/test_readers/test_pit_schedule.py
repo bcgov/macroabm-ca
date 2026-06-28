@@ -21,6 +21,14 @@ from macro_data.readers.taxation.personal_income_tax.pit_schedule import (
     _validate_brackets,
 )
 
+# Committed fallback copy of the BC PIT schedules
+# (repo-root/spoof_data/freda/personal_income_tax).
+#   parents[0]=test_readers [1]=unit [2]=test_macro_data [3]=tests [4]=repo root
+BC_SCHEDULE_DIR = (
+    Path(__file__).resolve().parents[4]
+    / "spoof_data" / "freda" / "personal_income_tax"
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -298,7 +306,7 @@ class TestPITSchedule:
 
     def test_from_name_loads_bc_2014(self):
         """Built-in bc_pit_2014.csv loads with 6 brackets."""
-        schedule = PITSchedule.from_name("bc_pit_2014.csv")
+        schedule = PITSchedule.from_name("bc_pit_2014.csv", schedule_dir=BC_SCHEDULE_DIR)
         assert schedule.base_year == 2014
         thresholds, rates, lower_bounds, quick_adds = schedule.get_brackets(
             tax_year=2014
@@ -319,14 +327,16 @@ class TestPITSchedule:
     def test_from_name_with_cpi_map(self):
         """Explicit CPI map overrides any cached/default."""
         schedule = PITSchedule.from_name(
-            "bc_pit_2014.csv", cpi_map={2014: 0.10, 2015: 0.20}
+            "bc_pit_2014.csv",
+            schedule_dir=BC_SCHEDULE_DIR,
+            cpi_map={2014: 0.10, 2015: 0.20},
         )
         assert schedule.cpi_map[2014] == 0.10
         assert schedule.cpi_map[2015] == 0.20
 
     def test_get_brackets_base_year_no_inflation(self):
         """Base-year brackets equal nominal CSV values."""
-        schedule = PITSchedule.from_name("bc_pit_2014.csv")
+        schedule = PITSchedule.from_name("bc_pit_2014.csv", schedule_dir=BC_SCHEDULE_DIR)
         _, _, lower_bounds, _ = schedule.get_brackets(tax_year=2014)
         # Known nominal lower bounds from bc_pit_2014.csv
         expected = [0, 37606, 75213, 86354, 104858, 150000]
@@ -334,7 +344,7 @@ class TestPITSchedule:
 
     def test_get_brackets_before_base_year_raises(self):
         """Requesting a year before the base year raises."""
-        schedule = PITSchedule.from_name("bc_pit_2014.csv")
+        schedule = PITSchedule.from_name("bc_pit_2014.csv", schedule_dir=BC_SCHEDULE_DIR)
         with pytest.raises(
             ValueError, match="before base year"
         ):
@@ -344,6 +354,7 @@ class TestPITSchedule:
         """CPI-inflated year: indexed bounds compound, non-indexed stay."""
         schedule = PITSchedule.from_name(
             "bc_pit_2014.csv",
+            schedule_dir=BC_SCHEDULE_DIR,
             cpi_map={2014: 0.01, 2015: 0.02, 2016: 0.03},
         )
         _, _, lbs_base, _ = schedule.get_brackets(tax_year=2014)
@@ -365,6 +376,7 @@ class TestPITSchedule:
         """CPI gap between base_year and requested year raises."""
         schedule = PITSchedule.from_name(
             "bc_pit_2014.csv",
+            schedule_dir=BC_SCHEDULE_DIR,
             cpi_map={2014: 0.01},  # only 2014, not 2015
         )
         with pytest.raises(
@@ -424,11 +436,11 @@ class TestPITSchedule:
     def test_from_name_file_not_found_raises(self):
         """Non-existent schedule name raises FileNotFoundError."""
         with pytest.raises(FileNotFoundError, match="Schedule file not found"):
-            PITSchedule.from_name("NONEXISTENT.csv")
+            PITSchedule.from_name("NONEXISTENT.csv", schedule_dir=BC_SCHEDULE_DIR)
 
     def test_compute_tax_convenience(self):
         """PITSchedule.compute_tax wrapper matches manual call."""
-        schedule = PITSchedule.from_name("bc_pit_2014.csv")
+        schedule = PITSchedule.from_name("bc_pit_2014.csv", schedule_dir=BC_SCHEDULE_DIR)
         incomes = np.array([30000.0, 80000.0, 200000.0])
 
         via_method = schedule.compute_tax(incomes, tax_year=2014)
@@ -439,7 +451,7 @@ class TestPITSchedule:
 
     def test_available_years(self):
         """available_years returns sorted unique years from CSV."""
-        schedule = PITSchedule.from_name("bc_pit_2014.csv")
+        schedule = PITSchedule.from_name("bc_pit_2014.csv", schedule_dir=BC_SCHEDULE_DIR)
         years = schedule.available_years
         assert len(years) > 0
         assert years[0] == 2014
@@ -468,6 +480,7 @@ class TestPITSchedule:
         """Compound-inflated thresholds are computed from inflated bounds."""
         schedule = PITSchedule.from_name(
             "bc_pit_2014.csv",
+            schedule_dir=BC_SCHEDULE_DIR,
             cpi_map={2014: 0.01, 2015: 0.01},
         )
         thresholds, rates, lower_bounds, quick_adds = schedule.get_brackets(

@@ -64,8 +64,10 @@ CPI inflation map
 Inflation data is stored separately (not in the bracket CSV).  It is a
 simple CSV with columns ``year`` and ``inflation``, where ``inflation`` is
 the BC all-items CPI year-over-year change as a decimal (e.g. 0.018
-for 1.8 %).  This file lives at ``spoof_data/freda/bc_cpi_inflation.csv``
-and can be refreshed at any time via ``fetch_bc_cpi_inflation()``.
+for 1.8 %).  This file lives alongside the bracket CSVs in the taxation
+directory (``raw_data_path / "taxation" / "personal_income_tax" / "bc_cpi_inflation.csv"``, with
+``spoof_data/freda`` as the committed fallback) and can be refreshed at any
+time via ``fetch_bc_cpi_inflation()``.
 
 Compound inflation
 ------------------
@@ -114,9 +116,11 @@ _REQUIRED_COLS = {
     "indexing",       # bool (0/1) — whether this bound is CPI-indexed
 }
 
-# ── paths ────────────────────────────────────────────────────────────
-_PIT_SCHEDULE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "spoof_data" / "freda"
-_CPI_CACHE_FILE = _PIT_SCHEDULE_DIR / "bc_cpi_inflation.csv"
+# ── CPI cache filename ───────────────────────────────────────────────
+# The cached BC CPI inflation map lives alongside the bracket CSVs inside the
+# taxation directory (``raw_data_path / "taxation" / "personal_income_tax"``); the schedule directory is
+# supplied by the caller rather than resolved relative to this module.
+_CPI_CACHE_FILENAME = "bc_cpi_inflation.csv"
 
 # ── StatCan table details ────────────────────────────────────────────
 _STATCAN_CPI_TABLE = "18-10-0005-01"
@@ -203,7 +207,7 @@ def compute_progressive_tax_quick(
 # =====================================================================
 
 def fetch_bc_cpi_inflation(
-    cache_path: Optional[Path] = None,
+    cache_path: Path,
     force_refresh: bool = False,
 ) -> dict[int, float]:
     """Return BC all-items annual CPI inflation as ``{year: rate}``.
@@ -216,8 +220,8 @@ def fetch_bc_cpi_inflation(
     Subsequent calls read the cached file unless *force_refresh* is set.
 
     Args:
-        cache_path: Where to read/write the cached CPI CSV.
-            Defaults to ``spoof_data/freda/bc_cpi_inflation.csv``.
+        cache_path: Where to read/write the cached CPI CSV — typically
+            ``raw_data_path / "taxation" / "personal_income_tax" / "bc_cpi_inflation.csv"``.
         force_refresh: If ``True``, always re-fetch from StatCan.
 
     Returns:
@@ -229,9 +233,6 @@ def fetch_bc_cpi_inflation(
         RuntimeError: If the StatCan table cannot be retrieved or
             filtered.
     """
-    if cache_path is None:
-        cache_path = _CPI_CACHE_FILE
-
     if not force_refresh and cache_path.exists():
         df = pd.read_csv(cache_path)
         return dict(zip(df["year"].astype(int), df["inflation"].astype(float)))
@@ -440,14 +441,23 @@ class PITSchedule:
     def from_name(
         cls,
         filename: str,
+        schedule_dir: Path,
         cpi_map: Optional[dict[int, float]] = None,
     ) -> "PITSchedule":
-        """Load a schedule by filename from ``spoof_data/freda/``."""
-        path = _PIT_SCHEDULE_DIR / filename
+        """Load a schedule by filename from *schedule_dir*.
+
+        Args:
+            filename: Bracket CSV filename (e.g. ``"bc_pit_2014.csv"``).
+            schedule_dir: Directory holding the schedule CSVs — typically
+                ``raw_data_path / "taxation" / "personal_income_tax"``.
+            cpi_map: Optional ``{year: inflation_rate}`` for CPI indexing.
+        """
+        schedule_dir = Path(schedule_dir)
+        path = schedule_dir / filename
         if not path.exists():
             raise FileNotFoundError(
                 f"Schedule file not found: {path}\n"
-                f"Available: {sorted([p.name for p in _PIT_SCHEDULE_DIR.glob('*.csv')])}"
+                f"Available: {sorted([p.name for p in schedule_dir.glob('*.csv')])}"
             )
         schedule = cls.from_csv(path, cpi_map=cpi_map)
         schedule._load_companion_tax_credits(path)
@@ -457,28 +467,33 @@ class PITSchedule:
     def from_name_with_cpi(
         cls,
         filename: str,
+        schedule_dir: Path,
         force_refresh: bool = False,
     ) -> "PITSchedule":
-        """Load a schedule by filename from ``spoof_data/freda/`` with CPI.
+        """Load a schedule by filename from *schedule_dir* with CPI.
 
         Resolution order:
         1. If the CSV has an ``inflation`` column → use it (no fetch).
-        2. Else if ``bc_cpi_inflation.csv`` exists → load from cache.
+        2. Else if ``bc_cpi_inflation.csv`` exists in *schedule_dir* → load
+           from cache.
         3. Else → fetch live from StatCan table 18-10-0005-01.
 
         Args:
-            filename: CSV filename (e.g. ``"bc_pit_2014.csv"``).
+            filename: Bracket CSV filename (e.g. ``"bc_pit_2014.csv"``).
+            schedule_dir: Directory holding the schedule CSVs (and the CPI
+                cache) — typically ``raw_data_path / "taxation" / "personal_income_tax"``.
             force_refresh: If ``True``, re-download CPI from StatCan
                 (ignored when the CSV has an ``inflation`` column).
 
         Returns:
             A ``PITSchedule`` with CPI inflation data.
         """
-        path = _PIT_SCHEDULE_DIR / filename
+        schedule_dir = Path(schedule_dir)
+        path = schedule_dir / filename
         if not path.exists():
             raise FileNotFoundError(
                 f"Schedule file not found: {path}\n"
-                f"Available: {sorted([p.name for p in _PIT_SCHEDULE_DIR.glob('*.csv')])}"
+                f"Available: {sorted([p.name for p in schedule_dir.glob('*.csv')])}"
             )
         schedule = cls.from_csv_with_cpi(path, force_refresh=force_refresh)
         schedule._load_companion_tax_credits(path)
@@ -519,7 +534,9 @@ class PITSchedule:
             logger.info("CSV has an inflation column — using embedded values.")
             return cls.from_csv(p)
 
-        cpi = fetch_bc_cpi_inflation(force_refresh=force_refresh)
+        cpi = fetch_bc_cpi_inflation(
+            cache_path=p.parent / _CPI_CACHE_FILENAME, force_refresh=force_refresh
+        )
         return cls.from_csv(p, cpi_map=cpi)
 
     # ── companion tax-credit file auto-discovery ────────────────────

@@ -10,6 +10,14 @@ from macro_data.readers.taxation.personal_income_tax.dividend_tax_credit_schedul
     DividendTaxCreditSchedule,
 )
 
+# Committed fallback copy of the BC PIT schedules
+# (repo-root/spoof_data/freda/personal_income_tax).
+#   parents[0]=test_readers [1]=unit [2]=test_macro_data [3]=tests [4]=repo root
+BC_SCHEDULE_DIR = (
+    Path(__file__).resolve().parents[4]
+    / "spoof_data" / "freda" / "personal_income_tax"
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # from_name — the packaged BC schedule
@@ -19,7 +27,7 @@ from macro_data.readers.taxation.personal_income_tax.dividend_tax_credit_schedul
 class TestPackagedSchedule:
     def test_2014_eligible_rates(self):
         schedule = DividendTaxCreditSchedule.from_name(
-            "bc_dividend_tax_credit_schedule.csv"
+            "bc_dividend_tax_credit_schedule.csv", schedule_dir=BC_SCHEDULE_DIR
         )
         rates = schedule.get_rates(2014, "eligible")
         assert rates.gross_up_rate == pytest.approx(0.38)
@@ -28,7 +36,7 @@ class TestPackagedSchedule:
 
     def test_2014_non_eligible_rates(self):
         schedule = DividendTaxCreditSchedule.from_name(
-            "bc_dividend_tax_credit_schedule.csv"
+            "bc_dividend_tax_credit_schedule.csv", schedule_dir=BC_SCHEDULE_DIR
         )
         rates = schedule.get_rates(2014, "non_eligible")
         assert rates.gross_up_rate == pytest.approx(0.18)
@@ -37,7 +45,7 @@ class TestPackagedSchedule:
 
     def test_get_year_rates_returns_both_types(self):
         schedule = DividendTaxCreditSchedule.from_name(
-            "bc_dividend_tax_credit_schedule.csv"
+            "bc_dividend_tax_credit_schedule.csv", schedule_dir=BC_SCHEDULE_DIR
         )
         year = schedule.get_year_rates(2014)
         assert set(year) == {"eligible", "non_eligible"}
@@ -47,7 +55,7 @@ class TestPackagedSchedule:
     def test_open_ended_range_applies_to_later_year(self):
         """The 2019-onward row (blank year_to) covers a later year like 2020."""
         schedule = DividendTaxCreditSchedule.from_name(
-            "bc_dividend_tax_credit_schedule.csv"
+            "bc_dividend_tax_credit_schedule.csv", schedule_dir=BC_SCHEDULE_DIR
         )
         eligible = schedule.get_rates(2020, "eligible")
         non_eligible = schedule.get_rates(2020, "non_eligible")
@@ -57,7 +65,7 @@ class TestPackagedSchedule:
     def test_multi_year_range_applies_midrange(self):
         """The eligible 2012-2018 row covers an interior year like 2016."""
         schedule = DividendTaxCreditSchedule.from_name(
-            "bc_dividend_tax_credit_schedule.csv"
+            "bc_dividend_tax_credit_schedule.csv", schedule_dir=BC_SCHEDULE_DIR
         )
         rates = schedule.get_rates(2016, "eligible")
         assert rates.gross_up_rate == pytest.approx(0.38)
@@ -66,21 +74,23 @@ class TestPackagedSchedule:
     def test_year_before_first_row_raises(self):
         """Eligible rows start in 2009; 2008 has no applicable row."""
         schedule = DividendTaxCreditSchedule.from_name(
-            "bc_dividend_tax_credit_schedule.csv"
+            "bc_dividend_tax_credit_schedule.csv", schedule_dir=BC_SCHEDULE_DIR
         )
         with pytest.raises(ValueError, match="covers tax year 2008"):
             schedule.get_rates(2008, "eligible")
 
     def test_unknown_dividend_type_raises(self):
         schedule = DividendTaxCreditSchedule.from_name(
-            "bc_dividend_tax_credit_schedule.csv"
+            "bc_dividend_tax_credit_schedule.csv", schedule_dir=BC_SCHEDULE_DIR
         )
         with pytest.raises(ValueError, match="No rows for dividend_type"):
             schedule.get_rates(2014, "preferred")
 
     def test_file_not_found_raises(self):
         with pytest.raises(FileNotFoundError, match="Dividend-rate file not found"):
-            DividendTaxCreditSchedule.from_name("does_not_exist.csv")
+            DividendTaxCreditSchedule.from_name(
+                "does_not_exist.csv", schedule_dir=BC_SCHEDULE_DIR
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════

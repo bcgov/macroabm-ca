@@ -315,8 +315,6 @@ class CentralGovernment(Agent):
         individuals_corr_households: np.ndarray | None = None,
         households_type: np.ndarray | None = None,
         households_n_adults: np.ndarray | None = None,
-        children_under_18_per_ind: np.ndarray | None = None,
-        children_under_6_per_ind: np.ndarray | None = None,
         taxable_income_per_ind: np.ndarray | None = None,
         credit_base_per_ind: np.ndarray | None = None,
         grossed_up_dividend_per_ind: np.ndarray | None = None,
@@ -361,8 +359,6 @@ class CentralGovernment(Agent):
             individuals_corr_households (Optional[np.ndarray]): Household ID per individual
             households_type (Optional[np.ndarray]): HouseholdType enum per household
             households_n_adults (Optional[np.ndarray]): Number of adults per household
-            children_under_18_per_ind (Optional[np.ndarray]): Children under 18 in individual's household
-            children_under_6_per_ind (Optional[np.ndarray]): Children under 6 in individual's household
             taxable_income_per_ind (Optional[np.ndarray]): Pool A — pre-assembled
                 taxable income per individual. Built internally when omitted.
             credit_base_per_ind (Optional[np.ndarray]): Pool B — pre-assembled
@@ -422,8 +418,6 @@ class CentralGovernment(Agent):
                     individuals_corr_households=individuals_corr_households,
                     households_type=households_type,
                     households_n_adults=households_n_adults,
-                    children_under_18_per_ind=children_under_18_per_ind,
-                    children_under_6_per_ind=children_under_6_per_ind,
                 )
                 if taxable_income_per_ind is None:
                     taxable_income_per_ind = build_taxable_income_pool(ctx)
