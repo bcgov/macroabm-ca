@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from macro_data.readers.default_readers import _load_taxation_reader
+from macro_data.readers.default_readers import DataPaths, _load_taxation_reader
 from macro_data.readers.taxation import TaxationDataWarning, TaxationReader
 
 # Committed schedules.
@@ -86,3 +86,36 @@ class TestLoadTaxationReader:
         assert isinstance(reader, TaxationReader)
         assert reader.pit_schedule.base_year == 2014
         assert reader.dividend_schedule is not None
+
+
+class TestDataPathsTaxationWiring:
+    """Cover the ``from_raw_data`` taxation seam without running the full,
+    heavy ``DataReaders.from_raw_data``.
+
+    ``from_raw_data`` resolves the taxation reader as
+    ``_load_taxation_reader(datapaths.taxation_path)`` (default_readers.py), and
+    ``datapaths`` comes from ``DataPaths.default_paths``.  These tests pin both
+    halves of that composition: that ``default_paths`` points
+    ``taxation_path`` at ``raw_data_path / "taxation"``, and that feeding that
+    exact path through the loader yields a populated ``TaxationReader``.
+    """
+
+    def test_default_paths_wires_taxation_path(self, tmp_path):
+        datapaths = DataPaths.default_paths(tmp_path, icio_years=[])
+        assert datapaths.taxation_path == tmp_path / "taxation"
+
+    def test_default_paths_taxation_path_loads_reader(self, tmp_path):
+        # Lay a populated taxation tree under a raw-data root, then drive the
+        # exact path resolution ``from_raw_data`` performs.
+        _make_taxation_tree(tmp_path, with_schedules=True)
+        datapaths = DataPaths.default_paths(tmp_path, icio_years=[])
+        reader = _load_taxation_reader(datapaths.taxation_path)
+        assert isinstance(reader, TaxationReader)
+        assert reader.pit_schedule.base_year == 2014
+        assert reader.dividend_schedule is not None
+
+    def test_default_paths_no_taxation_tree_is_none(self, tmp_path):
+        # A raw-data root with no taxation tree -> the seam yields no reader
+        # (progressive PIT stays inactive), matching flat-rate parity.
+        datapaths = DataPaths.default_paths(tmp_path, icio_years=[])
+        assert _load_taxation_reader(datapaths.taxation_path) is None

@@ -121,9 +121,11 @@ class DataPaths:
     ch4_emissions_path: Optional[Path] = None
     # Taxation schedule directory (PIT brackets, credit amounts, dividend rates,
     # CPI cache).  Optional and additive, mirroring the energy-sector readers:
-    # absent ⇒ the central-government builder falls back to the committed
-    # schedules.  Consumed at config-build time by the builder (which resolves
-    # ``raw_data_path / "taxation"`` itself), not by ``from_raw_data``.
+    # absent ⇒ no ``TaxationReader`` is built and progressive PIT stays inactive
+    # (flat-rate parity); it is *not* backfilled from committed schedules.
+    # Consumed by ``from_raw_data`` via ``_load_taxation_reader`` to populate
+    # ``DataReaders.taxation``; the central-government builder then takes that
+    # loaded reader rather than resolving paths itself.
     taxation_path: Optional[Path] = None
 
     @classmethod
@@ -793,6 +795,13 @@ def _load_taxation_reader(taxation_path: Optional[Path]) -> Optional[TaxationRea
     directory *does* exist but its personal-income-tax schedules are missing, the
     absence is treated as a misconfiguration and a :class:`TaxationDataWarning`
     is emitted before returning ``None``.
+
+    Jurisdiction is BC-only at this seam: the reader is built with
+    ``TaxationReader.from_dir``'s default (``jurisdiction="bc"``), matching the
+    current BC-provincial dataset.  Downstream consumption is already
+    jurisdiction-keyed (``activate_taxation`` reads ``taxation_reader.jurisdiction``),
+    so supporting additional taxing authorities means threading a jurisdiction
+    selector into this loader, not changing the consumers.
 
     Args:
         taxation_path: The ``raw_data_path / "taxation"`` root (or ``None``).
