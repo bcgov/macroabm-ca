@@ -43,12 +43,18 @@ from macromodel.agents.agent import Agent
 from macromodel.agents.banks.banks import Banks
 from macromodel.agents.central_bank.central_bank import CentralBank
 from macromodel.agents.central_government.central_government import CentralGovernment
+from macromodel.agents.central_government.pit_pools import (
+    PitContext,
+    build_credit_base_pool,
+    build_dividend_tax_items,
+    build_taxable_income_pool,
+)
 from macromodel.agents.firms import Firms
 from macromodel.agents.government_entities.government_entities import GovernmentEntities
 from macromodel.agents.households.households import Households
 from macromodel.agents.individuals.individual_properties import ActivityStatus
 from macromodel.agents.individuals.individuals import Individuals
-from macromodel.configurations import CountryConfiguration
+from macromodel.configurations import CountryConfiguration, activate_taxation
 from macromodel.economy.economy import Economy
 from macromodel.exchange_rates import ExchangeRates
 from macromodel.exogenous.exogenous import Exogenous
@@ -319,9 +325,35 @@ class Country:
 
         n_unemployed = (individuals.states["Activity Status"] == ActivityStatus.UNEMPLOYED).sum()
 
+        # Consume the country's taxation schedules: when this government opted in
+        # (activate_progressive_pit) and the country carries taxation data, layer
+        # the progressive PIT schedule (brackets, credits, dividend rates) onto
+        # its config; otherwise the flat config is used unchanged (parity).  This
+        # is per-government and jurisdiction-keyed (see activate_taxation), so it
+        # extends to multiple government agents without change here.
+        central_government_config = activate_taxation(
+            base_config=country_configuration.central_government,
+            taxation_reader=synthetic_country.taxation,
+            tax_year=initial_year,
+        )
+
+        # Scale PIT bracket thresholds to agent-level income units.
+        # Each synthetic agent represents *scale* real people, so a
+        # $50k bracket for individuals becomes $50k × scale for agents.
+        # Scale a *copy* of the central-government config — never mutate the
+        # caller-owned configuration, which may be reused across repeated
+        # Country construction or calibration loops (otherwise the brackets
+        # would be multiplied again on every reuse).
+        if central_government_config.pit_brackets is not None and scale > 1:
+            central_government_config = deepcopy(central_government_config)
+            central_government_config.pit_brackets = [
+                (threshold * scale, rate)
+                for threshold, rate in central_government_config.pit_brackets
+            ]
+
         central_government = CentralGovernment.from_pickled_agent(
             synthetic_central_government=synthetic_country.central_government,
-            configuration=country_configuration.central_government,
+            configuration=central_government_config,
             country_name=country_name,
             all_country_names=all_country_names,
             taxes_net_subsidies=taxes_less_subsidies,
@@ -329,6 +361,43 @@ class Country:
             tax_data=synthetic_country.tax_data,
             n_industries=n_industries,
         )
+
+        # --- Progressive PIT: pre-calibrate the effective rate ---
+        # When a progressive schedule is configured, compute the
+        # implied effective tax rate on the synthetic employee income
+        # distribution and overwrite states["Income Tax"].  This ensures
+        # that the very first period's wage-setting, after-tax income,
+        # and rental income calculations use the schedule-consistent
+        # rate rather than the raw OECD average — eliminating a
+        # calibration shock at t=0.
+        pit_thresholds = central_government.states.get("pit_thresholds")
+        pit_rates = central_government.states.get("pit_rates")
+        if pit_thresholds is not None and pit_rates is not None:
+            ind_ages = individuals.states.get("Age")
+            ind_corr_hh = individuals.states.get("Corresponding Household ID")
+
+            # Processing phase: assemble Pool A (taxable income) and Pool B
+            # (credit base) on the synthetic employee-income distribution,
+            # then let the government's tax core imply the effective rate.
+            pit_ctx = PitContext(
+                employee_income=individuals.states["Employee Income"],
+                employee_si_rate=float(
+                    central_government.states["Employee Social Insurance Tax"]
+                ),
+                individuals_age=ind_ages,
+                individuals_corr_households=ind_corr_hh,
+                households_type=households.states.get("Type"),
+                households_n_adults=households.states.get("Number of Adults"),
+            )
+            taxable_pool = build_taxable_income_pool(pit_ctx)
+            credit_pool = build_credit_base_pool(
+                central_government.states.get("pit_tax_credits"),
+                taxable_pool,
+                pit_ctx,
+            )
+            # compute_pit updates states["Income Tax"] to the schedule-implied
+            # effective rate (the pre-calibration goal).
+            central_government.compute_pit(taxable_pool, credit_pool)
 
         government_entities = GovernmentEntities.from_pickled_agent(
             synthetic_government_entities=synthetic_country.government_entities,
@@ -695,6 +764,7 @@ class Country:
         )
 
         # Individual income
+        _div_integration = self.central_government.states.get("pit_dividend_integration", False)
         self.individuals.ts.expected_income.append(
             self.individuals.compute_expected_income(
                 expected_firm_profits=self.firms.ts.current("expected_profits"),
@@ -703,6 +773,7 @@ class Country:
                 expected_inflation=self.economy.ts.current("estimated_cpi_inflation")[0],
                 income_taxes=self.central_government.states["Income Tax"],
                 tau_firm=self.central_government.states["Profit Tax"],
+                dividend_income_taxes=0.0 if _div_integration else None,
             )
         )
 
@@ -1216,6 +1287,7 @@ class Country:
 
         # E1. INDIVIDUAL AND HOUSEHOLD INCOME
         # Update individual income components
+        _div_integration = self.central_government.states.get("pit_dividend_integration", False)
         self.individuals.ts.income.append(
             self.individuals.compute_income(
                 firm_profits=self.firms.ts.current("profits"),
@@ -1223,6 +1295,7 @@ class Country:
                 cpi=self.economy.ts.current("cpi")[0],
                 income_taxes=self.central_government.states["Income Tax"],
                 tau_firm=self.central_government.states["Profit Tax"],
+                dividend_income_taxes=0.0 if _div_integration else None,
             )
         )
         self.individuals.ts.income_histogram.append(get_histogram(self.individuals.ts.current("income"), self.scale))
@@ -1358,13 +1431,94 @@ class Country:
         self.economy.ts.bank_insolvency_rate.append([self.banks.compute_insolvency_rate()])
 
         # G5. GOVERNMENT REVENUE
-        # General government fields
+        # Processing phase: distribute household-level rental and financial
+        # income to individuals, then assemble the two PIT pools (taxable
+        # income + credit base).  Adding a new income stream or tax credit
+        # means editing pit_pools.py and this block — the central
+        # government's tax core (compute_pit) stays fixed.
+        rental_income_per_individual = self.households.distribute_rental_income_to_individuals(
+            housing_data=self.housing_market.states["properties"],
+            corr_households=self.individuals.states["Corresponding Household ID"],
+            individual_employee_income=self.individuals.ts.current("employee_income"),
+            couple_rental_income_split=self.central_government.states["couple_rental_income_split"],
+        )
+        financial_income_per_individual = self.households.distribute_financial_income_to_individuals(
+            household_financial_income=self.households.ts.current("income_financial_assets"),
+            corr_households=self.individuals.states["Corresponding Household ID"],
+            n_individuals=len(self.individuals.states["Corresponding Household ID"]),
+        )
+
+        ind_ages = self.individuals.states.get("Age")
+        ind_corr_hh = self.individuals.states.get("Corresponding Household ID")
+
+        # Dividend integration (off by default → both arrays stay None,
+        # the pool and credits are unchanged, full upstream parity).  When on,
+        # gross up both firm and bank dividends for taxable income (pool A) and
+        # build the dividend tax credits (the 2b direct credit).  The real
+        # dividends received by households are computed separately in income.py
+        # and are not affected by these tax-only quantities.
+        grossed_up_dividend_per_ind = None
+        dividend_tax_credit_per_ind = None
+        if self.central_government.states.get("pit_dividend_integration", False):
+            tau_firm = float(self.central_government.states["Profit Tax"])
+            gross_up_kwargs = dict(
+                eligible_gross_up=float(self.central_government.states["dividend_eligible_gross_up"]),
+                non_eligible_gross_up=float(self.central_government.states["dividend_non_eligible_gross_up"]),
+                eligible_dtc_rate=float(self.central_government.states["dividend_eligible_dtc_rate"]),
+                non_eligible_dtc_rate=float(self.central_government.states["dividend_non_eligible_dtc_rate"]),
+            )
+            gross_firm_dividend = self.individuals.compute_gross_firm_dividend(
+                firm_profits=self.firms.ts.current("profits"),
+                tau_firm=tau_firm,
+            )
+            grossed_up_firm, dtc_firm = build_dividend_tax_items(
+                dividend_income=gross_firm_dividend,
+                small_business_share=float(self.central_government.states["dividend_small_business_share"]),
+                **gross_up_kwargs,
+            )
+            gross_bank_dividend = self.individuals.compute_gross_bank_dividend(
+                bank_profits=self.banks.ts.current("profits"),
+                tau_firm=tau_firm,
+            )
+            grossed_up_bank, dtc_bank = build_dividend_tax_items(
+                dividend_income=gross_bank_dividend,
+                small_business_share=float(self.central_government.states["bank_dividend_small_business_share"]),
+                **gross_up_kwargs,
+            )
+            grossed_up_dividend_per_ind = grossed_up_firm + grossed_up_bank
+            dividend_tax_credit_per_ind = dtc_firm + dtc_bank
+
+        pit_ctx = PitContext(
+            employee_income=self.individuals.ts.current("employee_income"),
+            employee_si_rate=float(
+                self.central_government.states["Employee Social Insurance Tax"]
+            ),
+            rental_income=rental_income_per_individual,
+            financial_income=financial_income_per_individual,
+            grossed_up_dividend=grossed_up_dividend_per_ind,
+            individuals_age=ind_ages,
+            individuals_corr_households=ind_corr_hh,
+            households_type=self.households.states.get("Type"),
+            households_n_adults=self.households.states.get("Number of Adults"),
+        )
+        taxable_income_per_ind = build_taxable_income_pool(pit_ctx)
+        credit_base_per_ind = build_credit_base_pool(
+            self.central_government.states.get("pit_tax_credits"),
+            taxable_income_per_ind,
+            pit_ctx,
+        )
+
         self.central_government.compute_taxes(
             current_ind_employee_income=self.individuals.ts.current("employee_income"),
             current_total_rent_paid=self.households.ts.current("rent")[
                 self.households.states["Tenure Status of the Main Residence"] == 3
             ].sum(),
             current_income_financial_assets=self.households.ts.current("income_financial_assets"),
+            # Pass both individual income streams so the direct-call fallback
+            # (when the prebuilt pools below are omitted) can rebuild the
+            # taxable-income pool symmetrically. The main path uses the pools.
+            current_ind_rental_income=rental_income_per_individual,
+            current_ind_financial_income=financial_income_per_individual,
             current_ind_activity=self.individuals.states["Activity Status"],
             current_ind_realised_cons=self.households.ts.current("consumption"),
             current_bank_profits=self.banks.ts.current("profits"),
@@ -1375,6 +1529,10 @@ class Country:
             taxes_less_subsidies_rates=self.central_government.states["Taxes Less Subsidies Rates"],
             current_household_new_real_wealth=self.households.ts.current("investment"),
             current_total_exports=self.economy.ts.current("exports_before_taxes").sum(),
+            taxable_income_per_ind=taxable_income_per_ind,
+            credit_base_per_ind=credit_base_per_ind,
+            grossed_up_dividend_per_ind=grossed_up_dividend_per_ind,
+            direct_credits_per_ind=dividend_tax_credit_per_ind,
         )
 
         # General government fields
@@ -1423,8 +1581,8 @@ class Country:
             gross_fixed_capital_formation=self.firms.ts.current("total_capital_inputs_bought_costs").sum()
             + (1 + self.central_government.states["Capital Formation Tax"])
             * self.households.ts.current("investment").sum(),
-            exports=self.economy.ts.current("exports").sum(),
-            imports=self.economy.ts.current("imports").sum(),
+            exports=np.nansum(self.economy.ts.current("exports")),
+            imports=np.nansum(self.economy.ts.current("imports")),
             operating_surplus=self.firms.ts.current("gross_operating_surplus_mixed_income").sum(),
             wages=self.firms.ts.current("total_wage").sum(),
             rent_received=self.economy.ts.current("total_real_rent_rec")[0]

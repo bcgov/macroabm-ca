@@ -43,6 +43,7 @@ from macro_data.readers.economic_data.world_bank_reader import WorldBankReader
 from macro_data.readers.emission_fraction.emission_fraction_reader import EmissionsFractionReader
 from macro_data.readers.emissions.emissions_reader import CH4EmissionsReaderCAN, EmissionsReader
 from macro_data.readers.exo_prices.exo_prices_reader import SectorExoPricesReader
+from macro_data.readers.taxation import TaxationDataWarning, TaxationReader
 from macro_data.readers.icio_sea_matching import (
     add_investment_matrix_to_icio,
     get_investment_fractions,
@@ -90,6 +91,10 @@ class DataPaths:
         compustat_firms_quarterly_path (Path): Path to quarterly Compustat firms data
         compustat_banks_path (Path): Path to Compustat banks data
         emissions_path (Path): Path to emissions data
+        taxation_path (Optional[Path]): Path to the taxation schedule directory
+            (PIT brackets, tax-credit amounts, dividend gross-up / DTC rates, CPI
+            cache).  Optional and additive; consumed by the central-government
+            builder, not by ``from_raw_data``.
     """
 
     goods_criticality_path: Path
@@ -114,6 +119,14 @@ class DataPaths:
     emissions_fraction_path: Optional[Path] = None
     firm_prices_path: Optional[Path] = None
     ch4_emissions_path: Optional[Path] = None
+    # Taxation schedule directory (PIT brackets, credit amounts, dividend rates,
+    # CPI cache).  Optional and additive, mirroring the energy-sector readers:
+    # absent ⇒ no ``TaxationReader`` is built and progressive PIT stays inactive
+    # (flat-rate parity); it is *not* backfilled from committed schedules.
+    # Consumed by ``from_raw_data`` via ``_load_taxation_reader`` to populate
+    # ``DataReaders.taxation``; the central-government builder then takes that
+    # loaded reader rather than resolving paths itself.
+    taxation_path: Optional[Path] = None
 
     @classmethod
     def default_paths(cls, raw_data_path: Path, icio_years: Iterable[int]):
@@ -146,6 +159,7 @@ class DataPaths:
             compustat_firms_quarterly_path=raw_data_path / "compustat" / "firms_quarterly.csv",
             compustat_banks_path=raw_data_path / "compustat" / "banks.csv",
             emissions_path=raw_data_path / "emissions",
+            taxation_path=raw_data_path / "taxation",
             emissions_fraction_path=raw_data_path / "emission_factors",
             firm_prices_path=raw_data_path / "cims_prices" / "firm_prices.csv",
             ch4_emissions_path=raw_data_path
@@ -186,6 +200,8 @@ class DataReaders:
         compustat_banks (CompustatBanksReader): Compustat banks data reader
         emissions (EmissionsReader): Emissions data reader
         emission_fractions (Optional[EmissionsFractionReader]): Emission fraction data reader
+        taxation (Optional[TaxationReader]): Personal-income-tax schedule reader;
+            ``None`` when no taxation data is present (progressive PIT off)
         regions_dict (Optional[dict[Country, list[Region]]]): Regional disaggregation mapping
     """
 
@@ -207,6 +223,7 @@ class DataReaders:
     emission_fractions: Optional[EmissionsFractionReader] = None
     exo_prices: Optional[SectorExoPricesReader] = None
     ch4_emissions: Optional[CH4EmissionsReaderCAN] = None
+    taxation: Optional[TaxationReader] = None
     regions_dict: Optional[dict[Country, list[Region]]] = None
 
     @classmethod
@@ -491,6 +508,8 @@ class DataReaders:
         if datapaths.ch4_emissions_path is not None and datapaths.ch4_emissions_path.exists():
             ch4_emissions = CH4EmissionsReaderCAN.read_data(datapaths.ch4_emissions_path)
 
+        taxation = _load_taxation_reader(datapaths.taxation_path)
+
         return cls(
             icio=icio,
             wiod_sea=wiod_sea,
@@ -510,6 +529,7 @@ class DataReaders:
             emission_fractions=emission_fractions,
             exo_prices=exo_prices,
             ch4_emissions=ch4_emissions,
+            taxation=taxation,
             regions_dict=regions_dict,
         )
 
@@ -758,6 +778,55 @@ class DataReaders:
         weights_by_income_all.index = range(weights_by_income_all.shape[0])
         weights_by_income = weights_by_income_all
         return weights_by_income
+
+
+# Per-tax-type subdirectory holding the personal-income-tax schedules, relative
+# to the taxation root.  Mirrors the reader package layout
+# (macro_data/readers/taxation/personal_income_tax/).
+_PIT_SUBDIR = "personal_income_tax"
+
+
+def _load_taxation_reader(taxation_path: Optional[Path]) -> Optional[TaxationReader]:
+    """Build the taxation reader from the taxation root, or ``None`` when absent.
+
+    Additive and optional, like the energy-sector readers: a run without a
+    ``taxation/`` tree simply does not get taxation (progressive PIT is not
+    activated downstream), and that common case is silent.  When a ``taxation/``
+    directory *does* exist but its personal-income-tax schedules are missing, the
+    absence is treated as a misconfiguration and a :class:`TaxationDataWarning`
+    is emitted before returning ``None``.
+
+    Jurisdiction is BC-only at this seam: the reader is built with
+    ``TaxationReader.from_dir``'s default (``jurisdiction="bc"``), matching the
+    current BC-provincial dataset.  Downstream consumption is already
+    jurisdiction-keyed (``activate_taxation`` reads ``taxation_reader.jurisdiction``),
+    so supporting additional taxing authorities means threading a jurisdiction
+    selector into this loader, not changing the consumers.
+
+    Args:
+        taxation_path: The ``raw_data_path / "taxation"`` root (or ``None``).
+
+    Returns:
+        A ``TaxationReader`` when the schedules are present, else ``None``.
+    """
+    if taxation_path is None or not taxation_path.exists():
+        # Taxation simply not in use — silent, matching the energy-sector
+        # "path is None / absent ⇒ skip" convention.
+        return None
+
+    pit_dir = taxation_path / _PIT_SUBDIR
+    if not pit_dir.exists():
+        warnings.warn(
+            f"A taxation directory exists at {taxation_path} but its "
+            f"personal-income-tax schedules are missing at {pit_dir}; taxation is "
+            f"disabled (progressive PIT will not activate). Populate "
+            f"{pit_dir} to enable it.",
+            TaxationDataWarning,
+            stacklevel=2,
+        )
+        return None
+
+    return TaxationReader.from_dir(pit_dir)
 
 
 def prune_icio_dict(icio_dict: dict[int, Any], prune_date: date):
