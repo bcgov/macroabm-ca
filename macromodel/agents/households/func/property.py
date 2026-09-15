@@ -258,12 +258,12 @@ class DefaultHouseholdDemandForProperty(HouseholdDemandForProperty):
         """
         # Indices
         ind_in_social_housing = household_residence_tenure_status == -1
-        ind_renting = np.array(household_residence_tenure_status == 0)
+        ind_renting = np.array(household_residence_tenure_status == 3)
         ind_renting_not_staying = np.logical_and(
             ind_renting,
             np.random.random(ind_renting.shape[0]) > self.probability_stay_in_rented_property,
         )
-        ind_owning = np.array(household_residence_tenure_status == 1)
+        ind_owning = np.isin(household_residence_tenure_status, [1, 2, 4])
         ind_owning_not_staying = np.logical_and(
             ind_owning,
             np.random.random(ind_owning.shape[0]) > self.probability_stay_in_owned_property,
