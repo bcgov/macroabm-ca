@@ -1298,6 +1298,7 @@ class Country:
         self.households.update_wealth(
             housing_data=self.housing_market.states["properties"],
             tau_cf=self.central_government.states["Capital Formation Tax"],
+            tau_vat=self.central_government.states["Value-added Tax"],
         )
         self.households.ts.wealth_histogram.append(get_histogram(self.households.ts.current("wealth"), self.scale))
         self.households.ts.net_wealth.append(self.households.compute_net_wealth())

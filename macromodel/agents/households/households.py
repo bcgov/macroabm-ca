@@ -1222,7 +1222,7 @@ class Households(Agent):
         self.ts.total_investment_before_vat.append([self.ts.current("investment").sum()])
         self.ts.industry_investment.append(self.ts.current("investment").sum(axis=0))
 
-    def update_wealth(self, housing_data: pd.DataFrame, tau_cf: float) -> None:
+    def update_wealth(self, housing_data: pd.DataFrame, tau_cf: float, tau_vat: float) -> None:
         """Update household wealth positions.
 
         Updates:
@@ -1234,6 +1234,7 @@ class Households(Agent):
         Args:
             housing_data (pd.DataFrame): Property market data
             tau_cf (float): Capital formation tax rate
+            tau_vat (float): Value added tax rate
         """
         # Update real wealth
         self.ts.wealth_main_residence.append(
@@ -1256,15 +1257,17 @@ class Households(Agent):
             + self.ts.current("wealth_other_real_assets")
         )
 
-        # New financial wealth
-        new_wealth = np.maximum(
-            0.0,
-            (
-                self.ts.current("income")
-                - self.ts.current("rent")
-                - self.ts.current("nominal_amount_spent_in_lcu").sum(axis=1)
-            ),
+        # Net financial flow. The consumption tax is booked as revenue on realised
+        # consumption in the same period, so it leaves the household with the spending.
+        net_financial_flow = (
+            self.ts.current("income")
+            - self.ts.current("rent")
+            - self.ts.current("nominal_amount_spent_in_lcu").sum(axis=1)
+            - tau_vat * self.ts.current("consumption")
         )
+
+        # New financial wealth
+        new_wealth = np.maximum(0.0, net_financial_flow)
         (
             new_wealth_in_deposits,
             new_wealth_in_other_financial_assets,
@@ -1275,14 +1278,7 @@ class Households(Agent):
         )
 
         # Used-up financial wealth
-        used_up_wealth = -np.minimum(
-            0.0,
-            (
-                self.ts.current("income")
-                - self.ts.current("rent")
-                - self.ts.current("nominal_amount_spent_in_lcu").sum(axis=1)
-            ),
-        )
+        used_up_wealth = -np.minimum(0.0, net_financial_flow)
         (
             used_up_wealth_in_deposits,
             used_up_wealth_in_other_financial_assets,
