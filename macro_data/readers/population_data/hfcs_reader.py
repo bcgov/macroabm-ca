@@ -339,8 +339,8 @@ class HFCSReader:
 
         # Convert monetary values to local currency
         var_numerical_union = [v for v in var_numerical if v in df.columns]
-        monetary_values = df.loc[:, var_numerical_union].replace(["A", "M"], np.nan).apply(
-            pd.to_numeric, errors="coerce"
+        monetary_values = (
+            df.loc[:, var_numerical_union].replace(["A", "M"], np.nan).apply(pd.to_numeric, errors="coerce")
         )
         monetary_values *= exchange_rates.from_eur_to_lcu(
             country=country_name,

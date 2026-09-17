@@ -13,7 +13,6 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 
-
 SEA_TO_IO_CANDIDATE_TARGETS: dict[str, list[str]] = {
     # WIOD SEA has aggregate mining B.  The current provincial IO table splits
     # oil/gas/coal and keeps B07/B09, while older tables may keep B05.
@@ -105,8 +104,7 @@ def bridge_sea_to_io_industries(
 
     if unmapped:
         raise ValueError(
-            "Cannot align WIOD SEA sectors to IO industries without explicit rules: "
-            + ", ".join(sorted(set(unmapped)))
+            "Cannot align WIOD SEA sectors to IO industries without explicit rules: " + ", ".join(sorted(set(unmapped)))
         )
 
     if not pieces:

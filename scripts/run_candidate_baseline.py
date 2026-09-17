@@ -18,6 +18,7 @@ the tracked macro_data pipeline). Default search:
     <repo>/dev/pkl_files/disagg_sectorprovs_2026_07_10_default.pkl
 Pass a path if yours lives elsewhere.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,8 +34,12 @@ from macromodel.simulation import Simulation
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_PKL = REPO / "dev/pkl_files/disagg_sectorprovs_2026_07_10_default.pkl"
-HH_COLS = ["Real Household Consumption (Value)", "Household Consumption (Value)",
-           "Real Household Investment (Value)", "Household Investment (Value)"]
+HH_COLS = [
+    "Real Household Consumption (Value)",
+    "Household Consumption (Value)",
+    "Real Household Investment (Value)",
+    "Household Investment (Value)",
+]
 HOUSEHOLD_DEMAND_GROWTH = 0.02  # common 2% exogenous household-demand overlay (candidate arm)
 
 
@@ -52,8 +57,7 @@ def _extend_exogenous_national_accounts(model, required_length: int) -> None:
         for step in range(required_length - len(frame)):
             rows.append(frame.iloc[-1].copy())
             index.append(last_index + pd.DateOffset(months=3 * (step + 1)))
-        country.exogenous.national_accounts_during = pd.concat(
-            [frame, pd.DataFrame(rows, index=index)], axis=0)
+        country.exogenous.national_accounts_during = pd.concat([frame, pd.DataFrame(rows, index=index)], axis=0)
 
 
 def main() -> None:
@@ -68,7 +72,8 @@ def main() -> None:
     if not pkl.exists():
         raise SystemExit(
             f"DataWrapper pickle not found: {pkl}\n"
-            "Pass a path, or rebuild it from raw_data via the macro_data pipeline.")
+            "Pass a path, or rebuild it from raw_data via the macro_data pipeline."
+        )
 
     data = DataWrapper.init_from_pickle(pkl)
     # province keys are the CAN_* countries (ROW is the rest-of-world block, not a province)
@@ -87,7 +92,9 @@ def main() -> None:
         for i, c in enumerate(country_names):
             apply_candidate_growth_baseline(
                 cfg.country_configurations[c],
-                use_observed_labour_path=True, province=c, n_quarters=args.quarters + 1,
+                use_observed_labour_path=True,
+                province=c,
+                n_quarters=args.quarters + 1,
                 # per-province demography seed (matches the documented run convention)
                 demography_seed=1000 + i + 100 * args.seed,
             )
@@ -118,16 +125,24 @@ def main() -> None:
             ui = np.array(f.ts.current("used_intermediate_inputs"), float)
             ro[t] += float((qr * base).sum())
             ri[t] += float((ui * base[None, :]).sum()) if ui.ndim == 2 else 0.0
-        u[t] = float(np.mean([np.array(m.countries[c].economy.ts.current("unemployment_rate"),
-                                       float).reshape(-1)[0] for c in country_names]))
+        u[t] = float(
+            np.mean(
+                [
+                    np.array(m.countries[c].economy.ts.current("unemployment_rate"), float).reshape(-1)[0]
+                    for c in country_names
+                ]
+            )
+        )
     rva = ro - ri
     yrs = (args.quarters - 1) / 4.0
     ann = ((rva[-1] / rva[0]) ** (1 / yrs) - 1) * 100
 
     mode = "LEGACY (shipped defaults)" if args.legacy else "CANDIDATE growth baseline"
     print(f"\n=== {mode} | {len(country_names)} provinces | seed {args.seed} | {args.quarters}q ===")
-    print(f"  double-deflated real GVA: {rva[0] / 1e9:.1f}B -> {rva[-1] / 1e9:.1f}B  "
-          f"({(rva[-1] / rva[0] - 1) * 100:+.1f}% cumulative, {ann:+.2f}%/yr)")
+    print(
+        f"  double-deflated real GVA: {rva[0] / 1e9:.1f}B -> {rva[-1] / 1e9:.1f}B  "
+        f"({(rva[-1] / rva[0] - 1) * 100:+.1f}% cumulative, {ann:+.2f}%/yr)"
+    )
     print(f"  unemployment: {u[0] * 100:.1f}% -> {u[-1] * 100:.1f}%")
     print("  (provisional baseline; national aggregate only; not validated for quantitative inference)")
 

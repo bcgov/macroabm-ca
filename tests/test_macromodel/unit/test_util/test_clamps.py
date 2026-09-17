@@ -1,4 +1,5 @@
 """Unit tests for the shared inf-safe input clamp (macromodel.util.clamps)."""
+
 import numpy as np
 
 from macromodel.util.clamps import clamp_towards

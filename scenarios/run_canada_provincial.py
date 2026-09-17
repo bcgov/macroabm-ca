@@ -20,8 +20,8 @@ import numpy as np
 import pandas as pd
 
 from macro_data import DataWrapper, configuration_utils
-from macro_data.configuration.dataconfiguration import DataConfiguration
 from macro_data.configuration.countries import Country as CountryCode
+from macro_data.configuration.dataconfiguration import DataConfiguration
 from macro_data.configuration.region import Region
 from macromodel.configurations import CountryConfiguration, SimulationConfiguration
 from macromodel.simulation import Simulation

@@ -263,9 +263,7 @@ class DisposableIncomeHouseholdConsumption(DefaultHouseholdConsumption):
             return income
         employee_income = np.asarray(employee_income, dtype=float)
         financial_income = np.asarray(financial_income, dtype=float)
-        personal_income_tax = income_tax * (
-            (1.0 - employee_social_insurance_tax) * employee_income + financial_income
-        )
+        personal_income_tax = income_tax * ((1.0 - employee_social_insurance_tax) * employee_income + financial_income)
         social_contributions = employee_social_insurance_tax * employee_income
         return np.maximum(0.0, income - personal_income_tax - social_contributions)
 

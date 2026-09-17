@@ -10,6 +10,7 @@ option (selecting a real planner re-enables it).
 The gating lives in ``Firms.compute_tfp_growth`` / ``Firms._investment_drives_tfp``;
 these are exercised on a light stub so no full simulation is built.
 """
+
 from types import SimpleNamespace
 
 import numpy as np
@@ -73,6 +74,7 @@ def _planner(cls):
 
 # ---- flag ----------------------------------------------------------------
 
+
 def test_investment_drives_tfp_flag():
     assert _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner))._investment_drives_tfp() is False
     assert _FakeFirm(SimpleTFPGrowth(), _planner(SimpleProductivityInvestmentPlanner))._investment_drives_tfp() is True
@@ -80,6 +82,7 @@ def test_investment_drives_tfp_flag():
 
 
 # ---- NoOp stays exactly inert -------------------------------------------
+
 
 def test_noop_inert_regardless_of_planner_or_investment():
     big_inv = [np.full(N, 1e9)]
@@ -90,6 +93,7 @@ def test_noop_inert_regardless_of_planner_or_investment():
 
 # ---- Simple + planner OFF follows only the base path --------------------
 
+
 def test_simple_base_only_when_planner_off():
     firm = _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner))
     assert np.allclose(firm.compute_tfp_growth(), BASE)
@@ -99,8 +103,7 @@ def test_capital_investment_does_not_alter_tfp_when_planner_off():
     # Large realized capital investment present in the time series, but the No-op planner
     # is active -> it must NOT enter TFP growth: still exactly the base rate.
     firm_no_inv = _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner))
-    firm_big_inv = _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner),
-                             executed=[np.full(N, 5e8)])
+    firm_big_inv = _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner), executed=[np.full(N, 5e8)])
     g0 = firm_no_inv.compute_tfp_growth()
     g1 = firm_big_inv.compute_tfp_growth()
     assert np.allclose(g0, BASE)
@@ -110,14 +113,15 @@ def test_capital_investment_does_not_alter_tfp_when_planner_off():
 
 # ---- investment-induced TFP works when explicitly enabled ---------------
 
+
 def test_investment_induced_tfp_only_when_planner_on():
     executed = [np.full(N, 5e8)]
     off = _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner), executed=executed)
     on = _FakeFirm(SimpleTFPGrowth(), _planner(SimpleProductivityInvestmentPlanner), executed=executed)
     g_off = off.compute_tfp_growth()
     g_on = on.compute_tfp_growth()
-    assert np.allclose(g_off, BASE)          # gated out
-    assert np.all(g_on > BASE + 1e-9)        # investment term active -> above base
+    assert np.allclose(g_off, BASE)  # gated out
+    assert np.all(g_on > BASE + 1e-9)  # investment term active -> above base
     # matches the SimpleTFPGrowth formula: base + eff * (I/Y)^elasticity
     inv, prod = executed[-1], np.full(N, 100.0)
     expected = BASE + SimpleTFPGrowth().investment_effectiveness * (inv / prod) ** ELAST
@@ -125,6 +129,7 @@ def test_investment_induced_tfp_only_when_planner_on():
 
 
 # ---- compounding correctness --------------------------------------------
+
 
 def test_compounding_matches_geometric():
     tfp = np.ones(N)
@@ -136,8 +141,7 @@ def test_compounding_matches_geometric():
 def test_clean_base_compounds_over_updates_with_planner_off():
     # End-to-end at the Firms level: repeatedly applying compute_tfp_growth with the
     # No-op planner compounds purely at the base rate, independent of stored investment.
-    firm = _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner),
-                     executed=[np.full(N, 9e8)])
+    firm = _FakeFirm(SimpleTFPGrowth(), _planner(NoProductivityInvestmentPlanner), executed=[np.full(N, 9e8)])
     tfp = np.ones(N)
     for _ in range(10):
         firm.states["tfp_multiplier"] = tfp

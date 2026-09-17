@@ -18,6 +18,7 @@ Neither is bundled in this branch. `CANDIDATE_GROWTH_BASELINE["labour_force_inde
 left None; a runner must supply a per-province quarterly index (base 1.0 at t0). Absent a
 path, demography falls back to the shipped `NoAging` default (fixed labour force).
 """
+
 from __future__ import annotations
 
 import json
@@ -33,8 +34,9 @@ _LABOUR_INDEX_JSON = Path(__file__).resolve().parents[2] / "scripts/data/labour_
 _LABOUR_BASE_YEAR = 2014
 
 
-def observed_labour_force_index(n_quarters: int, province: Optional[str] = None,
-                                uniform: bool = False) -> dict[str, list[float]] | list[float]:
+def observed_labour_force_index(
+    n_quarters: int, province: Optional[str] = None, uniform: bool = False
+) -> dict[str, list[float]] | list[float]:
     """Quarterly observed labour-force index (base 1.0 at t0), interpolated to n_quarters.
 
     Reads the bundled annual index and linearly interpolates annual -> quarterly, holding
@@ -52,8 +54,7 @@ def observed_labour_force_index(n_quarters: int, province: Optional[str] = None,
             scripts/build_labour_force_index.py).
     """
     if not _LABOUR_INDEX_JSON.exists():
-        raise FileNotFoundError(
-            f"{_LABOUR_INDEX_JSON} not found; rebuild with scripts/build_labour_force_index.py")
+        raise FileNotFoundError(f"{_LABOUR_INDEX_JSON} not found; rebuild with scripts/build_labour_force_index.py")
     raw = json.loads(_LABOUR_INDEX_JSON.read_text())
     years = sorted(int(y) for y in next(iter(raw.values())))
     year_q = np.array([(y - _LABOUR_BASE_YEAR) * 4 + 1.5 for y in years])  # annual obs at mid-year
@@ -61,7 +62,7 @@ def observed_labour_force_index(n_quarters: int, province: Optional[str] = None,
 
     def _interp(annual_by_year: dict[str, float]) -> list[float]:
         vals = np.array([annual_by_year[str(y)] for y in years], dtype=float)
-        idx = np.interp(grid, year_q, vals)   # np.interp holds the endpoints flat outside the range
+        idx = np.interp(grid, year_q, vals)  # np.interp holds the endpoints flat outside the range
         return (idx / idx[0]).tolist()
 
     if uniform:
@@ -104,12 +105,12 @@ CANDIDATE_GROWTH_BASELINE: dict[str, Any] = {
     },
     "target_capital_inputs": {
         "target_capital_inputs_fraction": 0.1,  # lambda (shipped default 0.0)
-        "rolling_reference": True,               # shipped default False
+        "rolling_reference": True,  # shipped default False
     },
     "government_consumption_setter": "ExogenousGovernmentConsumptionSetter",
     "household_consumption_setter": "ExogenousHouseholdConsumption",
     "household_investment_setter": "ExogenousHouseholdInvestment",
-    "demography": "ExogenousLabourForcePath",   # shipped default "NoAging"
+    "demography": "ExogenousLabourForcePath",  # shipped default "NoAging"
     # supplied per-province by the runner; None -> falls back to NoAging (see module docstring)
     "labour_force_index": None,
 }
@@ -162,7 +163,8 @@ def apply_candidate_growth_baseline(
         if province is None or n_quarters is None:
             raise ValueError("use_observed_labour_path=True requires `province` and `n_quarters`.")
         labour_force_index = observed_labour_force_index(
-            n_quarters=n_quarters, province=province, uniform=uniform_labour_path)
+            n_quarters=n_quarters, province=province, uniform=uniform_labour_path
+        )
 
     if labour_force_index is not None:
         country_config.individuals.functions.demography.name = p["demography"]

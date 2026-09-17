@@ -1,6 +1,7 @@
 """Unit tests for the get_histogram degenerate-distribution robustness fix.
 Previously np.histogram raised 'Too many bins for data range' on all-equal or
 non-finite inputs, crashing the whole simulation from a diagnostic call."""
+
 import numpy as np
 
 from macromodel.util.get_histogram import fillna, get_histogram

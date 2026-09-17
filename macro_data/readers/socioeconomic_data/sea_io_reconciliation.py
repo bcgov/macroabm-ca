@@ -8,7 +8,6 @@ import pandas as pd
 from macro_data.configuration.countries import Country
 from macro_data.configuration.region import Region
 
-
 DEFAULT_ACTIVE_VA_FLOOR_ANNUAL = 1e4
 DEFAULT_ENFORCE_ACTIVE_VA_ELIGIBILITY = True
 CAPITAL_ALLOCATION_ELIGIBLE_FIELD = "Capital Allocation Eligible"

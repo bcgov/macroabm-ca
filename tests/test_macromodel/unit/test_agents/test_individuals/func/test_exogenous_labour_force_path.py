@@ -1,5 +1,6 @@
 """Unit tests for the opt-in ExogenousLabourForcePath demography and the workforce-entry
 hooks. Also pins NoAging (default) as an exact no-op for backward compatibility."""
+
 import numpy as np
 
 from macromodel.agents.individuals.func.demography import ExogenousLabourForcePath, NoAging
@@ -45,7 +46,7 @@ class TestExogenousLabourForcePath:
             e.individuals_joining_the_workforce(current_individuals_activity=act)
             e.individuals_leaving_the_workforce(current_individuals_activity=act)
         log = e.log[-1]
-        assert log["labour_force"] == 15                        # 10 -> 15
+        assert log["labour_force"] == 15  # 10 -> 15
         assert log["target_labour_force"] == 15
         assert log["entries"] == 5
         assert int((act == ActivityStatus.EMPLOYED).sum()) == 8  # employed untouched

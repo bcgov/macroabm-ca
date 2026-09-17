@@ -16,6 +16,7 @@ CSV search order if no path is given:
     <repo>/../raw_data/14100327.csv   (shared SESIT raw_data)
     <repo>/dev/statcan/14100327.csv   (validation workspace)
 """
+
 from __future__ import annotations
 
 import json
@@ -29,9 +30,15 @@ OUT = REPO / "scripts/data/labour_force_index_2014_2024.json"
 Y0, Y1 = 2014, 2024
 
 PROVINCE_NAMES = {
-    "CAN_AB": "Alberta", "CAN_BC": "British Columbia", "CAN_MB": "Manitoba",
-    "CAN_NB": "New Brunswick", "CAN_NL": "Newfoundland and Labrador", "CAN_NS": "Nova Scotia",
-    "CAN_ON": "Ontario", "CAN_PE": "Prince Edward Island", "CAN_QC": "Quebec",
+    "CAN_AB": "Alberta",
+    "CAN_BC": "British Columbia",
+    "CAN_MB": "Manitoba",
+    "CAN_NB": "New Brunswick",
+    "CAN_NL": "Newfoundland and Labrador",
+    "CAN_NS": "Nova Scotia",
+    "CAN_ON": "Ontario",
+    "CAN_PE": "Prince Edward Island",
+    "CAN_QC": "Quebec",
     "CAN_SK": "Saskatchewan",
 }
 
@@ -42,14 +49,15 @@ def _find_csv(arg: str | None) -> Path:
     for c in (REPO.parent / "raw_data" / "14100327.csv", REPO / "dev/statcan/14100327.csv"):
         if c.exists():
             return c
-    raise FileNotFoundError(
-        "LFS 14-10-0327 CSV not found. Pass its path, or place 14100327.csv in ../raw_data/."
-    )
+    raise FileNotFoundError("LFS 14-10-0327 CSV not found. Pass its path, or place 14100327.csv in ../raw_data/.")
 
 
 def build(csv_path: Path) -> dict[str, dict[str, float]]:
-    df = pd.read_csv(csv_path, low_memory=False,
-                     usecols=["REF_DATE", "GEO", "Labour force characteristics", "Gender", "Age group", "VALUE"])
+    df = pd.read_csv(
+        csv_path,
+        low_memory=False,
+        usecols=["REF_DATE", "GEO", "Labour force characteristics", "Gender", "Age group", "VALUE"],
+    )
     gender = df["Gender"].str.strip().str.lower()
     df = df[
         (df["Labour force characteristics"] == "Labour force")

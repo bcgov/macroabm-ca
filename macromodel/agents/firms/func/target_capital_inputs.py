@@ -194,9 +194,7 @@ class TargetCapitalInputsSetter(ABC):
                 where=initial_production != 0.0,
             )
             base_year_reference = base_year_ratio[:, None] * initial_capital_inputs_stock
-            reference_capital_stock = np.where(
-                zero_prev_capital, base_year_reference, reference_capital_stock
-            )
+            reference_capital_stock = np.where(zero_prev_capital, base_year_reference, reference_capital_stock)
 
         return reference_capital_stock
 
