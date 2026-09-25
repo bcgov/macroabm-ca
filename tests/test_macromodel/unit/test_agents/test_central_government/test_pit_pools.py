@@ -274,6 +274,25 @@ class TestCoupleWithAnAdditionalAdult:
         assert base.sum() > 0.0
 
 
+class TestSpousalAmountOneClaimPerCouple:
+    """Only one spouse may claim the Spousal Amount: the higher earner, whose
+    claim against the other's income is the larger."""
+
+    def test_only_the_higher_earner_claims(self):
+        from macromodel.agents.households.household_properties import HouseholdType
+
+        # Each spouse earns below the 9295 top, so each could claim against the other.
+        ctx = _household_ctx(
+            [3000.0, 5000.0],
+            [45, 43],
+            HouseholdType.TWO_ADULTS_YOUNGER_THAN_65,
+        )
+        taxable = build_taxable_income_pool(ctx)
+        base = build_credit_base_pool([_SPOUSAL_2014], taxable, ctx)
+        # The younger spouse earns more, so claims against the elder's 3000.
+        np.testing.assert_allclose(base, [0.0, 8450.0 - (3000.0 - 845.0)])
+
+
 class TestEquivalentToSpouseEligibility:
     """One claim per single-parent household supporting a minor child.
 

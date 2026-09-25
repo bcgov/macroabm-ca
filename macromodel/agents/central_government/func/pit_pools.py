@@ -533,6 +533,7 @@ class _HouseholdContext:
     in_couple: np.ndarray | None
     is_single_parent: np.ndarray | None
     spouse_income: np.ndarray | None  # the other spouse's taxable base; inf if none
+    spousal_claimant: np.ndarray | None = None  # the one spouse per couple who claims
 
 
 def _household_context(
@@ -547,6 +548,12 @@ def _household_context(
     there is no spouse). The two eldest adults are taken as the spouses, so a
     resident adult child neither blocks the pairing nor joins it; without ages
     only unambiguous two-member couples are paired.
+
+    One spouse per couple is marked as the Spousal Amount claimant, since only
+    one may claim it: the higher earner, whose claim against the other's income
+    is the larger. A tie goes to the first of the pair, the elder where ages are
+    known. The larger claim is not always the larger saving: if other credits
+    already clear the higher earner's tax, the floor discards the claim.
     """
     corr = ctx.individuals_corr_households
     hh_type = ctx.households_type
@@ -610,7 +617,11 @@ def _household_context(
     spouse_income[first] = taxable_income_per_ind[second]
     spouse_income[second] = taxable_income_per_ind[first]
 
-    return _HouseholdContext(in_couple, is_single_parent, spouse_income)
+    spousal_claimant = np.zeros(n_ind, dtype=bool)
+    first_claims = taxable_income_per_ind[first] >= taxable_income_per_ind[second]
+    spousal_claimant[np.where(first_claims, first, second)] = True
+
+    return _HouseholdContext(in_couple, is_single_parent, spouse_income, spousal_claimant)
 
 
 def _published_exemption(tc: dict, amount: float) -> float:
@@ -724,13 +735,13 @@ def _credit_amount(
         excess = np.maximum(0.0, taxable_income_per_ind - cs)
         return np.where(eligible, np.maximum(0.0, amount - clawback_rate * excess), 0.0)
 
-    # spouse_income is inf for non-couples, so they clamp to zero.
+    # One claim per couple; spouse_income is inf for non-couples, so they clamp to zero.
     if credit == "Spousal Amount":
-        if household.in_couple is None or household.spouse_income is None:
+        if household.in_couple is None or household.spouse_income is None or household.spousal_claimant is None:
             return zeros
         exemption = _published_exemption(tc, amount)
         excess = np.maximum(0.0, household.spouse_income - exemption)
-        return np.maximum(0.0, amount - excess)
+        return np.where(household.spousal_claimant, np.maximum(0.0, amount - excess), 0.0)
 
     # One claim per single-parent household; the infirmity exception is not modelled.
     if credit == "Equivalent To Spouse Amount":
