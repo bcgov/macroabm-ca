@@ -34,11 +34,20 @@ class CountryConfiguration(BaseModel):
     housing_market: HousingMarketConfiguration = HousingMarketConfiguration()
     credit_market: CreditMarketConfiguration = CreditMarketConfiguration()
 
+    # Growth
     forecasting_window: int = 60
     assume_zero_growth: bool = False
     assume_zero_noise: bool = False
+
+    #Emissions
     use_emission_multiplier: bool = False
     CH4_production_emissions_only: bool = False
+
+    # Taxation
+    use_taxation_policies: bool = False
+    rate_flat: list[tuple[float, float]] = [(0, 0.0)]       # default brackets are purposely bad to force user override
+    rate_prog: list[tuple[float, float]] = [(0, 0.0)]       # default brackets are purposely bad to force user override
+
 
     @classmethod
     def n_industry_default(

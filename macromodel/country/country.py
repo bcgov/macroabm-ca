@@ -58,6 +58,12 @@ from macromodel.markets.labour_market.labour_market import LabourMarket
 from macromodel.rest_of_the_world import RestOfTheWorld
 from macromodel.util.get_histogram import get_histogram
 
+from macromodel.policy.personal_income_tax import PersonalIncomeTax
+from macromodel.policy.personal_income_tax import PersonalIncomeTaxProtocol
+from macromodel.policy.personal_income_tax import ProgressiveRate
+from macromodel.policy.personal_income_tax import FlatRate
+# import macromodel.policy.personal_income_tax    # try importing the whole package
+
 
 class Country:
     """A complete national economy with interacting agents and markets.
@@ -116,6 +122,8 @@ class Country:
     assume_zero_growth: bool
     assume_zero_noise: bool
     configuration: CountryConfiguration
+    personal_income_tax_flat: Optional[FlatRate] = None
+    personal_income_tax_prog: Optional[ProgressiveRate] = None
 
     def __init__(
         self,
@@ -143,6 +151,8 @@ class Country:
         emitting_indices: Optional[np.ndarray] = None,
         emission_factors_lcu_ch4: Optional[np.ndarray] = None,
         emitting_indices_ch4: Optional[np.ndarray] = None,
+        personal_income_tax_flat: Optional[FlatRate] = None,
+        personal_income_tax_prog: Optional[ProgressiveRate] = None,
     ):
         """Initialize a new country economy.
 
@@ -169,6 +179,8 @@ class Country:
             add_emissions (bool): If True, track emissions
             emission_factors_lcu (Optional[np.ndarray]): Emission factors
             emitting_indices (Optional[np.ndarray]): Industry indices that emit
+            personal_income_tax_flat (Optional[PersonalIncomeTax]): Peronal Income Tax Policy with a flat rate
+            personal_income_tax_prog (Optional[PersonalIncomeTax]): Peronal Income Tax Policy with a progressive rate
         """
         # Parameters
         self.country_name = country_name
@@ -201,17 +213,21 @@ class Country:
         self.forecasting_window = forecasting_window
         self.assume_zero_growth = assume_zero_growth
         self.assume_zero_noise = assume_zero_noise
-
         self.running_multiple_countries = running_multiple_countries
-
         self.configuration = configuration
 
+        # Emissions
         self.add_emissions = add_emissions
         self.emission_factors_lcu = emission_factors_lcu
         self.emitting_indices = emitting_indices
         self.emission_factors_lcu_ch4 = emission_factors_lcu_ch4
         self.emitting_indices_ch4 = emitting_indices_ch4
         self.use_emission_multiplier = self.configuration.use_emission_multiplier
+
+        # Taxation
+        self.use_taxation_policies = self.configuration.use_taxation_policies
+        self.personal_income_tax_flat = personal_income_tax_flat
+        self.personal_income_tax_prog = personal_income_tax_prog
 
     @classmethod
     def from_pickled_country(
@@ -400,6 +416,10 @@ class Country:
             scale=scale,
         )
 
+        if country_configuration.use_taxation_policies:
+            personal_income_tax_flat = FlatRate(country_configuration.rate_flat)
+            personal_income_tax_prog = ProgressiveRate(country_configuration.rate_prog)
+
         return cls(
             country_name=country_name,
             scale=scale,
@@ -425,6 +445,8 @@ class Country:
             emitting_indices=emitting_indices,
             emission_factors_lcu_ch4=emission_factors_lcu_ch4,
             emitting_indices_ch4=emitting_indices_ch4,
+            personal_income_tax_flat=personal_income_tax_flat,
+            personal_income_tax_prog=personal_income_tax_prog,
         )
 
     def reset(self, configuration: CountryConfiguration) -> None:
@@ -1433,6 +1455,62 @@ class Country:
             running_multiple_countries=self.running_multiple_countries,
         )
 
+        # Test new tax classes
+        print("\t\tTEST: With initial brackets:")
+        flat_policy = FlatRate([(float('inf'), 0.15)])
+        progressive_policy = ProgressiveRate([
+            (50000, 0.10),
+            (100000, 0.20),
+            (float('inf'), 0.30)
+        ])
+
+        a = self.apply_tax_policy(flat_policy, 75000)
+        b = self.apply_tax_policy(progressive_policy, 75000)
+
+        # Update policies
+        flat_policy.set_rate([(float('inf'), 0.2)])
+        progressive_policy.set_rate([
+            (50000, 0.15),
+            (100000, 0.25),
+            (float('inf'), 0.35)
+        ])
+
+        print("\t\tTEST: After updating brackets:")
+        c = self.apply_tax_policy(flat_policy, 75000)
+        d = self.apply_tax_policy(progressive_policy, 75000)
+
+        # Set bad inputs
+        print("\t\tTEST: Bad brackets:")
+        try:
+            flat_policy.set_rate([(0, 0.2)])
+        except ValueError as e:
+                    print(f"Error: {e}")
+
+        try:            
+            progressive_policy.set_rate([
+                (60000, 0.15),
+                (120000, 0.25),
+                (0, 0.35)
+            ])
+        except ValueError as e:
+                            print(f"Error: {e}")
+
+        try:                    
+            progressive_policy.set_rate([(float('inf'), 0.15)])
+        except ValueError as e:
+                            print(f"Error: {e}")
+
+        print("Got here!!")
+
+    def apply_tax_policy(self, policy: PersonalIncomeTaxProtocol, income: float) -> float:
+        """Apply a tax policy and print results."""
+        try:
+            tax = policy.calculate_tax(income)
+            print(f"Income: ${income:,.2f}, Tax: ${tax:,.2f}")
+            return tax    
+        except ValueError as e:
+            print(f"Error: {e}")
+    
     def update_population_structure(self) -> None:
         """Update demographic composition.
 

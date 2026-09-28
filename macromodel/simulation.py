@@ -297,6 +297,7 @@ class Simulation:
         Args:
             t (int): Current timestep index (0-indexed), used for logging/debugging
         """
+        print("timestep:" + str(self.timestep))
         # Execute pre-hooks before any iteration logic
         self.run_prehooks(self.timestep.year, self.timestep.month)
 
@@ -314,6 +315,7 @@ class Simulation:
             country.estimation_phase()
             country.target_setting_phase()
             country.clear_labour_market()
+            print("\tupdate_planning_metrics(): " + country.country_name)
             country.update_planning_metrics()
 
         if self.regional_aggregator:
@@ -357,6 +359,7 @@ class Simulation:
         # After goods market clearing
         self.rest_of_the_world.record_bought_goods()
         for country in self.countries.values():
+            print("\tupdate_realised_metrics: " + country.country_name)
             country.update_realised_metrics()
             country.update_population_structure()
 
