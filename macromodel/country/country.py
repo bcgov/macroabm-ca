@@ -58,6 +58,7 @@ from macromodel.markets.labour_market.labour_market import LabourMarket
 from macromodel.rest_of_the_world import RestOfTheWorld
 from macromodel.util.get_histogram import get_histogram
 
+from macromodel.timestep import Timestep
 from macromodel.policy.personal_income_tax import PersonalIncomeTax
 from macromodel.policy.personal_income_tax import PersonalIncomeTaxProtocol
 from macromodel.policy.personal_income_tax import ProgressiveRate
@@ -989,7 +990,7 @@ class Country:
             assume_zero_noise=self.assume_zero_noise,
         )
 
-    def update_realised_metrics(self) -> None:
+    def update_realised_metrics(self, timestep: Timestep) -> None:
         """Update realized economic outcomes after market clearing.
 
         This method coordinates the comprehensive updating of all economic metrics after markets
@@ -1455,11 +1456,14 @@ class Country:
             running_multiple_countries=self.running_multiple_countries,
         )
 
-        # Test new tax classes
-        print("\t\tTEST: end of timestep tax reconciliation:")
-        a = self.personal_income_tax_flat.compute_total_quarterly_tax(self.individuals, self.households, self.scale)
+        # calculate per timestep taxes due
+        a = self.personal_income_tax_flat.compute_timestep_tax(timestep, self.individuals, self.households, self.scale)
 
-        print("Got here!!")
+        # calculate annual taxes and reconcile difference with timestep taxes
+        if timestep.month == 10:
+            b = self.personal_income_tax_flat.compute_annual_tax(timestep, self.individuals, self.households, self.scale)
+
+        # print("Got here!!")
     
     def update_population_structure(self) -> None:
         """Update demographic composition.

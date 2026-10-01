@@ -16,6 +16,7 @@ to analyze:
 """
 
 import pandas as pd
+import numpy as np
 
 from macromodel.timeseries import TimeSeries
 from macromodel.util.get_histogram import get_histogram
@@ -63,4 +64,7 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         #
         labour_inputs=data["Labour Inputs"].values,
         reservation_wages=data["Employee Income"].values + data["Income from Unemployment Benefits"].values,
+
+        # Taxation
+        personal_income_tax_paid=np.zeros(len(data))
     )
