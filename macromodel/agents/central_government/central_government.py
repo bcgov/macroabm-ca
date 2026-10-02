@@ -304,6 +304,7 @@ class CentralGovernment(Agent):
         self.ts.taxes_exports.append([self.states["Export Tax"] * current_total_exports])
 
         # Total wages of employed individuals
+        # NOTE: using tot_wages_employed_ind to calc self.ts.taxes_income ONLY includes employed
         tot_wages_employed_ind = np.sum([current_ind_employee_income[current_ind_activity == ActivityStatus.EMPLOYED]])
 
         # Taxes on income
@@ -318,9 +319,6 @@ class CentralGovernment(Agent):
 
         # Taxes on employer social insurance
         self.ts.taxes_employer_si.append([self.states["Employer Social Insurance Tax"] * tot_wages_employed_ind])
-
-        # Taxes on employee social insurance
-        self.ts.taxes_employee_si.append([self.states["Employee Social Insurance Tax"] * tot_wages_employed_ind])
 
     def compute_taxes_on_products(self) -> float:
         """Calculate total taxes on products and production.

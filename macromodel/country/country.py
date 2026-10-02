@@ -1457,11 +1457,45 @@ class Country:
         )
 
         # calculate per timestep taxes due
-        a = self.personal_income_tax_flat.compute_timestep_tax(timestep, self.individuals, self.households, self.scale)
+        total_personal_income_tax = self.personal_income_tax_flat.compute_timestep_tax(
+            timestep, 
+            self.individuals, 
+            self.households, 
+            self.scale
+            )
 
         # calculate annual taxes and reconcile difference with timestep taxes
         if timestep.month == 10:
-            b = self.personal_income_tax_flat.compute_annual_tax(timestep, self.individuals, self.households, self.scale)
+            total_annual_personal_income_tax = self.personal_income_tax_flat.compute_annual_tax(
+                timestep, self.individuals, 
+                self.households, 
+                self.scale
+                )
+
+        ### manual test of equivalence (only works for flat tax)
+        # calculated using compute_timestep_tax()
+        output_1 = np.sum(self.individuals.ts.current("personal_income_tax_owed"))
+        # manual
+        total_taxable_income = np.sum(self.individuals.ts.current("taxable_income"))
+        output_2 = self.personal_income_tax_flat.compute_individual_tax(total_taxable_income / self.scale) * self.scale
+        print(f"test equivalence (method vs manual): {output_1 == output_2}")
+
+        ### compare new vs old pipelines
+        print("Compare calculations for this timestep:")
+        # Assumption: new pipeline uses individuals.ts.current("employee_income") as pre (not post) tax income
+        print(
+            f"\ttotal_personal_income_tax (new pipeline): " + 
+            f"${total_personal_income_tax:,.2f} " + 
+            f"at {self.personal_income_tax_flat.get_rate()} rate"
+            )
+        print(f"\ttotal_personal_income_tax (original pipeline): " +
+            f"${self.central_government.ts.current("taxes_income")[0]:,.2f} " +
+            f"at {self.central_government.states["Income Tax"]} rate"
+            )
+        a = total_personal_income_tax
+        b = self.central_government.ts.current("taxes_income")[0]
+        percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
+        print(f"\tpercent_difference: {percent_difference:.2f}%")
 
         # print("Got here!!")
     

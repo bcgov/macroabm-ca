@@ -39,7 +39,7 @@ class PersonalIncomeTax(ABC):
             households: Households, 
             scale: int
             ) -> float:
-        """Calculate total personal income tax of all indiviudal agents for one timestep
+        """Calculate personal income tax of all indiviudal agents for one timestep
         
         Attributes:
             timestep (Timestep): model timestep
@@ -48,31 +48,29 @@ class PersonalIncomeTax(ABC):
             scale (int): Number of people per individual agent
 
         Returns:
-           float: Total timestep personal income tax owed by all individual agents
+           float: Total personal income tax owed by all individual agents for this timestep
         """                   
 
-        debug_individual = False
+        debug_individuals = False
         debug_total_components = False
         increments_per_year = int(12 / timestep.increment)
 
-        # personal income tax streams
-        total_timestep_income = 0
-        total_timestep_income_employment = 0
-        total_timestep_income_unemployment = 0
-        total_timestep_income_rental = 0
+        # blanks for timeseries
+        individuals_taxable_income = np.zeros_like(individuals.ts.current("employee_income"))
+        individuals_taxable_income_employment = np.zeros_like(individuals.ts.current("employee_income"))
+        individuals_taxable_income_unemployment = np.zeros_like(individuals.ts.current("employee_income"))
+        individuals_taxable_income_rental = np.zeros_like(individuals.ts.current("employee_income"))
+        # individuals_taxable_income_investment = np.zeros_like(individuals.ts.current("employee_income"))  # TODO: implement
+        individuals_personal_income_tax_owed = np.zeros_like(individuals.ts.current("employee_income"))
 
-        individuals_timestep_tax = np.zeros_like(individuals.ts.current("employee_income"))
-
-        # output
-        total_timestep_tax = 0
-
-        # sum all taxable income streams across individuals
+        # calculate all taxable income streams across individuals
         for i in range(individuals.n_individuals):
-            timestep_income_employment = individuals.ts.current("employee_income")[i] / scale
+            individuals_taxable_income_employment[i] = individuals.ts.current("employee_income")[i]
 
             # NOTE: evidence suggests "income_from_unemployment_benefits" isn't functioning properly
             # - almost always zero even when unemployed
-            timestep_income_unemployment = individuals.ts.current("income_from_unemployment_benefits")[i] / scale
+            # TODO: check against central_government.ts.current("unemployment_benefits_by_individual")[0] in compute_deficit()
+            individuals_taxable_income_unemployment[i] = individuals.ts.current("income_from_unemployment_benefits")[i]
 
             # caclulate rental income (assuming it is split between all adult residents)
             # NOTE: alternative method could be to assume split between all employed adults
@@ -80,70 +78,64 @@ class PersonalIncomeTax(ABC):
             # - "income_rental" is always zero 
             #   WHILE self.households.ts.current("rent")[self.households.states["Tenure Status of the Main Residence"] == 3].sum()
             #   is > 0
-            timestep_income_rental = 0
-
+            individuals_taxable_income_rental[i] = 0
             if individuals.states["Corresponding Household ID"][i] != 0:       # check if belongs to a hh
                 hh_id = individuals.states["Corresponding Household ID"][i]    # identify which hh it belongs to
-                
-                if households.ts.current("income_rental")[hh_id] > 0 and individuals.states["Age"][i] >= 18:
-                    timestep_income_rental += (
-                        households.ts.current("income_rental")[hh_id] / 
-                        households.states["Number of Adults"][hh_id] / 
-                        scale
-                    )
-                    print("ALERT: Found a non-zero self.households.ts.income_rental")   # hh rental income reported!!!
 
-            timestep_income = (
-                timestep_income_employment +
-                timestep_income_unemployment +
-                timestep_income_rental
+                # assume income_rental is split evenly between all adults
+                if households.ts.current("income_rental")[hh_id] > 0 and individuals.states["Age"][i] >= 18:
+                    individuals_taxable_income_rental[i] += (
+                        households.ts.current("income_rental")[hh_id] / 
+                        households.states["Number of Adults"][hh_id]
+                    )
+
+            individuals_taxable_income[i] = (
+                individuals_taxable_income_employment[i] +
+                individuals_taxable_income_unemployment[i] +
+                individuals_taxable_income_rental[i]
             )
 
             # calculate individual tax owed 
-            # (assuming individual earns current timestep_individual_income for all increments of year)
-            projected_annual_tax = self.compute_individual_tax(timestep_income * increments_per_year)
-            projected_timestep_tax = projected_annual_tax / increments_per_year
+            # (assuming individual earns current timestep individuals_taxable_income for all increments of year)
+            # NOTE: individuals_taxable_income must be !UNSCALED! to align with values in self.brackets
+            projected_annual_tax = self.compute_individual_tax(
+                individuals_taxable_income[i]/scale * increments_per_year
+                ) * scale
+            individuals_personal_income_tax_owed[i] = projected_annual_tax / increments_per_year
 
-            # overwrite tax owed by individual for this timestep
-            individuals_timestep_tax[i] = projected_timestep_tax
-
-            # sum components
-            total_timestep_income += timestep_income
-            total_timestep_income_employment += timestep_income_employment
-            total_timestep_income_unemployment += timestep_income_unemployment
-            total_timestep_income_rental += timestep_income_rental
-            total_timestep_tax += projected_timestep_tax
-
-            # diagnostics
-            if debug_individual:
+            if debug_individuals:    # !UNSCALED! diagnostic so that it can be compared to real world individuals
                 print(
                     f"{i}: " +
                     f"hh_id: {individuals.states["Corresponding Household ID"][i]}, " +
                     f"employed: {individuals.states["Activity Status"][i] == ActivityStatus.EMPLOYED}, " +
-                    f"proj inc_empl: ${timestep_income_employment * increments_per_year:,.2f}, " + 
-                    f"proj inc_unemp: ${timestep_income_unemployment * increments_per_year:,.2f}, " + 
-                    f"proj inc_rent: ${timestep_income_rental * increments_per_year:,.2f}, " +
-                    f"proj inc_tot: ${timestep_income * increments_per_year:,.2f}, " + 
-                    f"proj tax: ${projected_timestep_tax * increments_per_year:,.2f}"
+                    f"income_employment: ${individuals_taxable_income_employment[i]/scale * increments_per_year:,.2f}, " + 
+                    f"income_unemployment: ${individuals_taxable_income_unemployment[i]/scale * increments_per_year:,.2f}, " + 
+                    f"income_rental: ${individuals_taxable_income_rental[i]/scale * increments_per_year:,.2f}, " +
+                    f"taxable_income: ${individuals_taxable_income[i]/scale * increments_per_year:,.2f}, " + 
+                    f"tax owed: ${individuals_personal_income_tax_owed[i]/scale * increments_per_year:,.2f}"
                     )
             
-        if debug_total_components:
+        if debug_total_components:  # !SCALED! diagnostic so that it can be compared to provincial values
             print(
-                f"actual tot_inc_empl: ${total_timestep_income_employment:,.2f}, " + 
-                f"actual tot_inc_unemp: ${total_timestep_income_unemployment:,.2f}, " + 
-                f"actual tot_inc_rent: ${total_timestep_income_rental:,.2f}, " +
-                f"actual tot_inc_tot: ${total_timestep_income:,.2f}" 
+                f"total income_employment: ${np.sum(individuals_taxable_income_employment):,.2f}, " + 
+                f"total income_unemployment: ${np.sum(individuals_taxable_income_unemployment):,.2f}, " + 
+                f"total income_rental: ${np.sum(individuals_taxable_income_rental):,.2f}, " +
+                f"total taxable_income: ${np.sum(individuals_taxable_income):,.2f}" 
                 )
 
-        # store tax owed by all individuals
-        individuals.ts.personal_income_tax_paid.append(individuals_timestep_tax)
-
-        total_timestep_tax *= scale     # scale to model
+        # store income streams and tax owed by all individuals
+        individuals.ts.taxable_income.append(individuals_taxable_income)
+        individuals.ts.taxable_income_employment.append(individuals_taxable_income_employment)
+        individuals.ts.taxable_income_unemployment.append(individuals_taxable_income_unemployment)
+        individuals.ts.taxable_income_rental.append(individuals_taxable_income_rental)
+        individuals.ts.personal_income_tax_owed.append(individuals_personal_income_tax_owed)
 
         if debug_total_components:
-            print(f"Total income tax: ${total_timestep_tax:,.2f} collected from {individuals.n_individuals} individuals")
+            print(f"Total personal_income_tax_owed: ${np.sum(individuals_personal_income_tax_owed):,.2f} " + 
+                  f"collected from {individuals.n_individuals} individuals"
+                  )
 
-        return total_timestep_tax
+        return np.sum(individuals_personal_income_tax_owed)
 
     def compute_annual_tax(
             self, 
@@ -153,7 +145,7 @@ class PersonalIncomeTax(ABC):
             scale: int
             ) -> float:
         """Calculate total annual personal income tax of all indiviudal agents 
-            and reconcile with timestep taxes collected within this year
+            and reconcile with those collected within this year
         
         Attributes:
             timestep (Timestep): model timestep
@@ -162,67 +154,47 @@ class PersonalIncomeTax(ABC):
             scale (int): Number of people per individual agent
 
         Returns:
-           float: Total annual personal income tax owed by all individual agents
+           float: Total annual personal income tax owed by all individual agents for this year
         """                   
 
-        debug_individual = False
+        debug_individuals = False
         debug_total_components = False
         increments_per_year = int(12 / timestep.increment)
 
         if timestep.month != 10:
-            raise ValueError("Annual tax can only be calculated at year end.")
+            raise ValueError("Annual tax is only calculated at year end.")
 
         total_annual_tax = 0
 
-        t = len(individuals.ts.employee_income) - 1
+        t = len(individuals.ts.employee_income) - 1     # current timestep index
         for i in range(individuals.n_individuals):
-            personal_income_tax_paid = 0
-            annual_income_employment = 0
-            annual_income_unemployment = 0
-            annual_income_rental = 0
-
-            # calculte taxes already paid for the year
+            annual_personal_income_tax_paid = 0
+            annual_taxable_income = 0
             for s in range(increments_per_year):
-                personal_income_tax_paid += individuals.ts.personal_income_tax_paid[t - s][i] / scale
+                # calculte taxes already paid for the year
+                annual_personal_income_tax_paid += individuals.ts.personal_income_tax_owed[t - s][i]
 
-            # calculate taxes that are due based on actual annual earnings
-            for s in range(increments_per_year):
-                annual_income_employment += individuals.ts.personal_income_tax_paid[t - s][i] / scale
-                annual_income_unemployment += individuals.ts.income_from_unemployment_benefits[t - s][i] / scale
-            
-                if individuals.states["Corresponding Household ID"][i] != 0:       # check if belongs to a hh
-                    hh_id = individuals.states["Corresponding Household ID"][i]    # identify which hh it belongs to
-                    
-                    if households.ts.current("income_rental")[hh_id] > 0 and individuals.states["Age"][i] >= 18:
-                        annual_income_rental += (
-                            households.ts.income_rental[t - s][hh_id] / 
-                            households.states["Number of Adults"][hh_id] / 
-                            scale
-                        )
-                        print("ALERT: Found a non-zero self.households.ts.income_rental")   # hh rental income reported!!!
-
-            annual_income = (
-                annual_income_employment +
-                annual_income_unemployment +
-                annual_income_rental
-            )
+                # calculate taxes that are due based on actual annual earnings
+                annual_taxable_income += individuals.ts.taxable_income[t - s][i]              
 
             # calculate individual tax owed
             # TODO: formulate a good way to store this that aligns with existing quarterly timeseries structure (if useful?)
-            annual_tax = self.compute_individual_tax(annual_income)
-            total_annual_tax += annual_tax
+            annual_personal_income_tax_due = self.compute_individual_tax(annual_taxable_income / scale) * scale
+            total_annual_tax += annual_personal_income_tax_due
             
             # reconcile difference between amount collected vs due
-            # TODO: store value if used elsewhere (or for diagnostics?)
-            # TODO: use to adjust individual / hh wealth to regain stock-flow consistency
-            tax_adjustment = (annual_tax - personal_income_tax_paid)* scale
-            original_payment = individuals.ts.current("personal_income_tax_paid")[i]
+            # TODO: store tax_adjustment if used elsewhere 
+            #   - could be useful to adjust individual / hh wealth to regain stock-flow consistency (or for diagnostics?)
+            tax_adjustment = annual_personal_income_tax_due - annual_personal_income_tax_paid
+            original_payment = individuals.ts.current("personal_income_tax_owed")[i]
 
             # !!!CAREFUL!!! overwrite timeseries entry
-            individuals.ts.dicts["personal_income_tax_paid"][-1][i] = original_payment + tax_adjustment
+            individuals.ts.dicts["personal_income_tax_owed"][-1][i] = original_payment + tax_adjustment
 
-        total_annual_tax *= scale     # scale to model
+        if debug_total_components:
+                    print(f"total_annual_tax: ${total_annual_tax:,.2f}")
 
+        # TODO: compare total_annual_tax to central_government.ts.current("taxes_income")
         return total_annual_tax
 
 class FlatRate(PersonalIncomeTax):

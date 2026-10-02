@@ -65,6 +65,12 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         labour_inputs=data["Labour Inputs"].values,
         reservation_wages=data["Employee Income"].values + data["Income from Unemployment Benefits"].values,
 
-        # Taxation
-        personal_income_tax_paid=np.zeros(len(data))
+        # Personal Income Tax
+        taxable_income=np.zeros(len(data)),
+        taxable_income_employment=np.zeros(len(data)),
+        taxable_income_unemployment=np.zeros(len(data)),
+        taxable_income_rental=np.zeros(len(data)),
+        # taxable_income_investment=np.zeros(len(data)),         # TODO: implement once other income streams are working
+        personal_income_tax_owed=np.zeros(len(data)),
+        # personal_income_tax_adjustment=np.zeros(len(data)),    # TODO: implement BUT it would be zero for timesteps.month != 10
     )
