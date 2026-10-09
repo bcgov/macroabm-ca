@@ -318,7 +318,7 @@ class Simulation:
             country.target_setting_phase()
             country.clear_labour_market()
             if debug: print("\tupdate_planning_metrics(): " + country.country_name)
-            country.update_planning_metrics()
+            country.update_planning_metrics(self.timestep)
 
         if self.regional_aggregator:
             logging.info("Synchronising central banks across regions")

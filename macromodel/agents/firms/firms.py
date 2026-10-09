@@ -16,6 +16,9 @@ from macromodel.markets.credit_market.credit_market import CreditMarket
 from macromodel.markets.goods_market.value_type import ValueType
 from macromodel.util.function_mapping import functions_from_model, update_functions
 
+from macromodel.timestep import Timestep
+from macromodel.policy.personal_income_tax import PersonalIncomeTax
+
 
 class Firms(Agent):
     """A collection of producing firms in the economy.
@@ -914,7 +917,9 @@ class Firms(Agent):
         income_taxes: float,
         employee_social_insurance_tax: float,
         employer_social_insurance_tax: float,
-    ) -> np.ndarray:
+        use_taxation_policies: bool,
+        personal_income_tax_policy: PersonalIncomeTax,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Set employee wages based on offers and market conditions.
 
         Updates wages considering:
@@ -935,9 +940,14 @@ class Firms(Agent):
             income_taxes (float): Income tax rate
             employee_social_insurance_tax (float): Employee SI tax rate
             employer_social_insurance_tax (float): Employer SI tax rate
+            use_taxation_policies (bool): Toggle for taxation policies
+            personal_income_tax_policy (PersonalIncomeTax): Personal income tax policy
 
         Returns:
-            np.ndarray: Updated employee wages
+            tuple[np.ndarray, np.ndarray, np.ndarray]: 
+                Updated employee incomes adjusted for all factors (net employ income), 
+                gross employee income, 
+                tax difference
         """
         return self.functions["wage_setter"].set_employee_income(
             corresponding_firm=corresponding_firm,
@@ -962,6 +972,8 @@ class Firms(Agent):
             employee_social_insurance_tax=employee_social_insurance_tax,
             employer_social_insurance_tax=employer_social_insurance_tax,
             current_tfp_multiplier=self.states["tfp_multiplier"],
+            use_taxation_policies=use_taxation_policies,
+            personal_income_tax_policy=personal_income_tax_policy,
         )
 
     def update_total_wages_paid(
@@ -972,6 +984,8 @@ class Firms(Agent):
         employee_social_insurance_tax: float,
         employer_social_insurance_tax: float,
         cpi: float,
+        use_taxation_policies: bool,
+        individuals_personal_income_tax_owed: np.ndarray,
     ) -> None:
         """Update total wage payments including taxes and adjustments.
 
@@ -988,20 +1002,74 @@ class Firms(Agent):
             employee_social_insurance_tax (float): Employee SI tax rate
             employer_social_insurance_tax (float): Employer SI tax rate
             cpi (float): Consumer price index
+            use_taxation_policies (bool): Toggle for taxation policies
+            individuals_personal_income_tax_owed (np.ndarray): Amount individuals owe for personal income tax
         """
+        debug = False   # Diagnostics
+        
         real_wages = np.bincount(
             corresponding_firm[corresponding_firm >= 0],
             weights=individual_wages[corresponding_firm >= 0],
             minlength=self.ts.current("n_firms"),
         )
-        self.ts.total_wage.append(
-            cpi
-            * (
+        
+        if use_taxation_policies:   # Use new tax pipeline (pre-tax wage)
+            firm_personal_income_tax = np.bincount(
+                corresponding_firm[corresponding_firm >= 0],
+                weights=individuals_personal_income_tax_owed[corresponding_firm >= 0],
+                minlength=self.ts.current("n_firms"),
+            )
+            final_wages = cpi * (real_wages + firm_personal_income_tax)
+        else:                       # Use original tax pipeline (post-tax wage)
+            tax = (
                 (1.0 + employer_social_insurance_tax)
                 / (1 - employee_social_insurance_tax - income_taxes * (1 - employee_social_insurance_tax))
-                * real_wages
             )
-        )
+            
+            final_wages = cpi * real_wages * tax
+
+        # Diagnostics
+        if debug and use_taxation_policies:
+            import math
+
+            # Test equality of total income tax due and the assignment to individual firms  
+            a = np.sum(firm_personal_income_tax)
+            b = np.sum(individuals_personal_income_tax_owed[corresponding_firm >= 0])
+            # NOTE: only considers individuals assigned to firms
+            print(f"Is the total income tax due and the assignment to individual firms close: {math.isclose(a, b)}")
+
+            # Test equality of post-tax wage + tax ?= pre-tax wage
+            from macromodel.policy.personal_income_tax import ProgressiveRate
+            from macromodel.policy.personal_income_tax import FlatRate
+
+            rate_flat = [(float('inf'), 0.09)]                  # TODO: update to load
+            scale = 1000                                        # TODO: update to load
+
+            personal_income_tax_flat = FlatRate(rate_flat)      # TODO update to use country_configuration.rate_flat
+            for i in range(len(individuals_personal_income_tax_owed)):
+                timestep_tax = personal_income_tax_flat.compute_individual_tax(
+                    (individual_wages[i]  + individuals_personal_income_tax_owed[i])/ scale
+                    ) * scale
+                if timestep_tax != individuals_personal_income_tax_owed[i]:
+                    print(f"Error: tax due from pre-tax wage != tax: " +
+                          f"{timestep_tax:,.2f} vs {individuals_personal_income_tax_owed[i]:,.2f}"
+                          )
+
+            # Compare difference between methods
+            tax = (
+                (1.0 + employer_social_insurance_tax)
+                / (1 - employee_social_insurance_tax - income_taxes * (1 - employee_social_insurance_tax))
+            )
+            a = real_wages * tax
+            b = real_wages + firm_personal_income_tax
+            i = 2
+            percent_difference = (np.abs(a[i] - b[i]) / ((a[i] + b[i]) / 2) * 100)
+            print(f"Compare pipelines for {self.industries[i]}")
+            print(f"real_wages * tax (old pipeline): \t\t\t${a[i]:,.2f}")
+            print(f"real_wages + firm_personal_income_tax (new pipeline): \t${b[i]:,.2f}")
+            print(f"percent_difference: {percent_difference:.2f}%")  
+
+        self.ts.total_wage.append(final_wages)
         self.ts.real_wage_per_capita.append(
             self.ts.current("total_wage") / cpi / self.ts.current("number_of_employees")
         )

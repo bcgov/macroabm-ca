@@ -29,6 +29,8 @@ from macromodel.configurations import CentralGovernmentConfiguration
 from macromodel.timeseries import TimeSeries
 from macromodel.util.function_mapping import functions_from_model, update_functions
 
+from macromodel.policy.personal_income_tax import PersonalIncomeTax
+
 
 class CentralGovernment(Agent):
     """Central Government agent responsible for fiscal policy and social benefits.
@@ -221,6 +223,8 @@ class CentralGovernment(Agent):
     def distribute_unemployment_benefits_to_individuals(
         self,
         current_individual_activity_status: np.ndarray,
+        use_taxation_policies: bool,
+        personal_income_tax_policy: PersonalIncomeTax,
     ) -> np.ndarray:
         """Distribute unemployment benefits to eligible individuals.
 
@@ -230,15 +234,28 @@ class CentralGovernment(Agent):
         Args:
             current_individual_activity_status (np.ndarray): Activity status
                 for each individual
+            use_taxation_policies (bool): Toggle for taxation policies
+            personal_income_tax_policy (PersonalIncomeTax): Personal income tax policy
 
         Returns:
-            np.ndarray: Unemployment benefits by individual (zero for employed)
+            tuple[np.ndarray, np.ndarray]: 
+                            Unemployment benefits by individual (zero for employed), 
+                            tax owed
         """
         unemployment_benefits = np.zeros(current_individual_activity_status.shape)
         unemployment_benefits[current_individual_activity_status == ActivityStatus.UNEMPLOYED] = self.ts.current(
             "unemployment_benefits_by_individual"
         )[0]
-        return unemployment_benefits.astype(float)
+        unemployment_benefits_gross = unemployment_benefits.astype(float)
+        
+        if use_taxation_policies:
+            personal_income_tax_paid_unemployment = personal_income_tax_policy.compute_withhold(unemployment_benefits_gross)
+            unemployment_benefits_net = unemployment_benefits_gross - personal_income_tax_paid_unemployment
+        else:
+            personal_income_tax_paid_unemployment = 0
+            unemployment_benefits_net = unemployment_benefits_gross
+
+        return unemployment_benefits_net, personal_income_tax_paid_unemployment
 
     def compute_taxes(
         self,
@@ -255,6 +272,8 @@ class CentralGovernment(Agent):
         current_household_new_real_wealth: np.ndarray,
         taxes_less_subsidies_rates: np.ndarray,
         current_total_exports: float,
+        use_taxation_policies: bool,
+        individuals_personal_income_tax_paid: np.ndarray,
     ) -> None:
         """Calculate all tax revenues for the current period.
 
@@ -278,7 +297,11 @@ class CentralGovernment(Agent):
             current_household_new_real_wealth (np.ndarray): New wealth
             taxes_less_subsidies_rates (np.ndarray): Net tax rates
             current_total_exports (float): Total exports
+            use_taxation_policies (bool): Toggle for taxation policies
+            individuals_personal_income_tax_paid (np.ndarray): Amount individuals paid for personal income tax
         """
+        debug = True   # Diagnostic
+        
         # Taxes on production
         self.ts.taxes_production.append(
             [np.sum(taxes_less_subsidies_rates[current_firm_industries] * current_firm_production * current_firm_price)]
@@ -304,17 +327,36 @@ class CentralGovernment(Agent):
         self.ts.taxes_exports.append([self.states["Export Tax"] * current_total_exports])
 
         # Total wages of employed individuals
-        # NOTE: using tot_wages_employed_ind to calc self.ts.taxes_income ONLY includes employed
+        # NOTE: includes employee_income ONLY from employed 
+        # (potentially misses unemployment income stream and rental income when unemployed)
         tot_wages_employed_ind = np.sum([current_ind_employee_income[current_ind_activity == ActivityStatus.EMPLOYED]])
 
         # Taxes on income
-        self.ts.taxes_income.append(
-            [
+        if use_taxation_policies:
+            taxes_income_final = [
+                np.sum(individuals_personal_income_tax_paid)                
+                # NOTE: Includes employment, unemployment (TODO: add rental income and investment)
+            ]
+        else:
+            taxes_income_final = [
                 self.states["Income Tax"] * (1 - self.states["Employee Social Insurance Tax"]) * tot_wages_employed_ind
                 + self.states["Income Tax"] * current_total_rent_paid
                 + self.states["Income Tax"] * current_income_financial_assets.sum(),
             ]
-        )
+
+        if debug and use_taxation_policies:
+            a = np.sum(individuals_personal_income_tax_paid)
+            b = (
+                self.states["Income Tax"] * (1 - self.states["Employee Social Insurance Tax"]) * tot_wages_employed_ind
+                + self.states["Income Tax"] * current_total_rent_paid
+                + self.states["Income Tax"] * current_income_financial_assets.sum()
+            )
+            percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
+            print(f"\t\ttaxes_income (new pipeline): ${a:,.2f}")
+            print(f"\t\ttaxes_income (old pipeline): ${b:,.2f}")
+            print(f"\t\tpercent_difference: {percent_difference:.2f}%") 
+            
+        self.ts.taxes_income.append(taxes_income_final)
         self.ts.taxes_rental_income.append([self.states["Income Tax"] * current_total_rent_paid])
 
         # Taxes on employer social insurance

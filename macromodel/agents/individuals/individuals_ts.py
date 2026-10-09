@@ -51,6 +51,15 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
             - income_histogram: Distribution of total income
             - labour_inputs: Labor market participation by individual
             - reservation_wages: Minimum acceptable wages by individual
+            - employee_income_gross: Pre-tax employment income
+            - taxable_income: Taxable income from all income streams
+            - taxable_income_employment: Taxable income from employment income
+            - taxable_income_unemployment: Taxable income from unemployment income
+            - taxable_income_rental: Taxable income from rental income
+            - taxable_income_investment: Taxable income from investment income
+            - personal_income_tax_owed: Personal income tax owed for all income streams
+            - personal_income_tax_paid: Personal income tax paid for all income streams
+            - personal_income_tax_paid_employment: Personal income tax paid for employment income
     """
     return TimeSeries(
         n_individuals=len(data),
@@ -66,11 +75,15 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         reservation_wages=data["Employee Income"].values + data["Income from Unemployment Benefits"].values,
 
         # Personal Income Tax
+        employee_income_gross=np.zeros(len(data)),
         taxable_income=np.zeros(len(data)),
         taxable_income_employment=np.zeros(len(data)),
         taxable_income_unemployment=np.zeros(len(data)),
         taxable_income_rental=np.zeros(len(data)),
         # taxable_income_investment=np.zeros(len(data)),         # TODO: implement once other income streams are working
         personal_income_tax_owed=np.zeros(len(data)),
-        # personal_income_tax_adjustment=np.zeros(len(data)),    # TODO: implement BUT it would be zero for timesteps.month != 10
+        personal_income_tax_paid=np.zeros(len(data)),
+        personal_income_tax_paid_employment=np.zeros(len(data)),
+        personal_income_tax_paid_unemployment=np.zeros(len(data)),
+        personal_income_tax_adjustment=np.zeros(len(data)),    # TODO: implement BUT it would be zero for timesteps.month != 10
     )

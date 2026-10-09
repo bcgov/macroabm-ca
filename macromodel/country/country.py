@@ -418,8 +418,16 @@ class Country:
         )
 
         if country_configuration.use_taxation_policies:
-            personal_income_tax_flat = FlatRate(country_configuration.rate_flat)
-            personal_income_tax_prog = ProgressiveRate(country_configuration.rate_prog)
+            personal_income_tax_flat = FlatRate(
+                brackets=country_configuration.rate_flat,
+                scale=scale,
+                increments_per_year=int(12/country_configuration.time_unit),
+            )
+            personal_income_tax_prog = ProgressiveRate(
+                brackets=country_configuration.rate_prog,
+                scale=scale,
+                increments_per_year=int(12/country_configuration.time_unit),
+            )
 
         return cls(
             country_name=country_name,
@@ -535,19 +543,18 @@ class Country:
         self.firms.ts.wage_tightness_markup.append(self.firms.compute_wages_markup())
 
         # Firms determine the wages they're willing to pay new employees
-        """
-        self.firms.states["offered_wage_function"] = self.firms.compute_offered_wage_function(
-            corresponding_firm=self.individuals.states["Corresponding Firm ID"],
-            current_individual_labour_inputs=self.individuals.ts.current("labour_inputs"),
-            previous_employee_income=self.individuals.ts.current("employee_income"),
-            unemployment_benefits_by_individual=self.central_government.ts.current(
-                "unemployment_benefits_by_individual"
-            )[0],
-            income_taxes=self.central_government.states["Income Tax"],
-            employee_social_insurance_tax=self.central_government.states["Employee Social Insurance Tax"],
-            employer_social_insurance_tax=self.central_government.states["Employer Social Insurance Tax"],
-        )
-        """
+        
+        # self.firms.states["offered_wage_function"] = self.firms.compute_offered_wage_function(
+        #     corresponding_firm=self.individuals.states["Corresponding Firm ID"],
+        #     current_individual_labour_inputs=self.individuals.ts.current("labour_inputs"),
+        #     previous_employee_income=self.individuals.ts.current("employee_income"),
+        #     unemployment_benefits_by_individual=self.central_government.ts.current(
+        #         "unemployment_benefits_by_individual"
+        #     )[0],
+        #     income_taxes=self.central_government.states["Income Tax"],
+        #     employee_social_insurance_tax=self.central_government.states["Employee Social Insurance Tax"],
+        #     employer_social_insurance_tax=self.central_government.states["Employer Social Insurance Tax"],
+        # )
 
         # Individuals set reservation wages
         self.individuals.ts.reservation_wages.append(
@@ -572,7 +579,7 @@ class Country:
         )
         self.firms.ts.labour_costs.append(labour_costs)
 
-    def update_planning_metrics(self) -> None:
+    def update_planning_metrics(self, timestep: Timestep) -> None:
         """Update forward-looking economic indicators.
 
         Computes expected profits, asset values, benefits, and other metrics
@@ -612,11 +619,15 @@ class Country:
         )
 
         # Individuals update their income from unemployment benefits
-        self.individuals.ts.income_from_unemployment_benefits.append(
-            self.central_government.distribute_unemployment_benefits_to_individuals(
-                current_individual_activity_status=self.individuals.states["Activity Status"],
-            )
+        incomes_unemployement_tuple = self.central_government.distribute_unemployment_benefits_to_individuals(
+            current_individual_activity_status=self.individuals.states["Activity Status"],
+            use_taxation_policies=self.use_taxation_policies,
+            personal_income_tax_policy=self.personal_income_tax_flat,   # TODO: Replace with abstract class once configuration is implemented
         )
+        unemployment_benefits_net, personal_income_tax_paid_unemployment = incomes_unemployement_tuple
+        self.individuals.ts.income_from_unemployment_benefits.append(unemployment_benefits_net)
+        if self.use_taxation_policies:
+            self.individuals.ts.personal_income_tax_paid_unemployment.append(personal_income_tax_paid_unemployment)
 
         # Individual labour inputs
         self.individuals.ts.labour_inputs.append(self.individuals.compute_labour_inputs())
@@ -654,20 +665,27 @@ class Country:
         )
 
         # Firm wages
-        self.individuals.ts.employee_income.append(
-            self.firms.set_employee_income(
-                corresponding_firm=self.individuals.states["Corresponding Firm ID"],
-                current_individual_labour_inputs=self.individuals.ts.current("labour_inputs"),
-                current_individual_stating_new_job=self.individuals.states["Started New Job"],
-                current_employee_income=self.individuals.ts.current("employee_income"),
-                current_individual_offered_wage=self.individuals.states["Offered Wage of Accepted Job"],
-                labour_inputs_from_employees=labour_inputs_from_employees,
-                estimated_ppi_inflation=self.economy.ts.current("estimated_ppi_inflation")[0],
-                income_taxes=self.central_government.states["Income Tax"],
-                employee_social_insurance_tax=self.central_government.states["Employee Social Insurance Tax"],
-                employer_social_insurance_tax=self.central_government.states["Employer Social Insurance Tax"],
-            )
+        incomes_employement_tuple = self.firms.set_employee_income(
+            corresponding_firm=self.individuals.states["Corresponding Firm ID"],
+            current_individual_labour_inputs=self.individuals.ts.current("labour_inputs"),
+            current_individual_stating_new_job=self.individuals.states["Started New Job"],
+            current_employee_income=self.individuals.ts.current("employee_income"),
+            current_individual_offered_wage=self.individuals.states["Offered Wage of Accepted Job"],
+            labour_inputs_from_employees=labour_inputs_from_employees,
+            estimated_ppi_inflation=self.economy.ts.current("estimated_ppi_inflation")[0],
+            income_taxes=self.central_government.states["Income Tax"],
+            employee_social_insurance_tax=self.central_government.states["Employee Social Insurance Tax"],
+            employer_social_insurance_tax=self.central_government.states["Employer Social Insurance Tax"],
+            use_taxation_policies=self.use_taxation_policies,
+            personal_income_tax_policy=self.personal_income_tax_flat,   # TODO: Replace with abstract class once configuration is implemented
         )
+        employee_income_net, employee_income_gross, personal_income_tax_paid_employment = incomes_employement_tuple
+        
+        self.individuals.ts.employee_income.append(employee_income_net)
+        if self.use_taxation_policies:
+            self.individuals.ts.employee_income_gross.append(employee_income_gross)
+            self.individuals.ts.personal_income_tax_paid_employment.append(personal_income_tax_paid_employment)
+        
         self.individuals.ts.employee_income_histogram.append(
             get_histogram(self.individuals.ts.current("employee_income"), self.scale)
         )
@@ -717,25 +735,7 @@ class Country:
             )
         )
 
-        # Individual income
-        self.individuals.ts.expected_income.append(
-            self.individuals.compute_expected_income(
-                expected_firm_profits=self.firms.ts.current("expected_profits"),
-                expected_bank_profits=self.banks.ts.current("expected_profits"),
-                cpi=self.economy.ts.current("cpi")[0],
-                expected_inflation=self.economy.ts.current("estimated_cpi_inflation")[0],
-                income_taxes=self.central_government.states["Income Tax"],
-                tau_firm=self.central_government.states["Profit Tax"],
-            )
-        )
-
-        # Household income
-        self.households.ts.expected_income_employee.append(
-            self.households.compute_employee_income(
-                individual_income=self.individuals.ts.current("expected_income"),
-                corr_households=self.individuals.states["Corresponding Household ID"],
-            )
-        )
+        # Household income components that are taxed
         self.households.ts.expected_income_social_transfers.append(
             self.households.compute_expected_social_transfer_income(
                 total_other_social_transfers=self.central_government.ts.current("total_other_benefits")[0],
@@ -752,6 +752,70 @@ class Country:
         self.households.ts.total_income_rental.append([self.households.ts.current("income_rental").sum()])
         self.households.ts.expected_income_financial_assets.append(
             self.households.compute_expected_income_from_financial_assets()
+        )
+
+        ###
+        ### Calculate taxes after incomes 
+        ### (except for household employment so the changes to individuals.ts.employee_income are downstream of spending) 
+        ###
+        if self.use_taxation_policies:
+        
+            # record personal income taxes paid from all income streams
+            personal_income_tax_paid = (
+                self.individuals.ts.current("personal_income_tax_paid_employment")
+                + self.individuals.ts.current("personal_income_tax_paid_unemployment")
+                # + self.individuals.ts.current("personal_income_tax_paid_rent")
+            )
+            self.individuals.ts.personal_income_tax_paid.append(personal_income_tax_paid)
+
+            # calculate per timestep taxes due
+            # NOTE: Must be executed after ALL income streams are assigned
+            total_personal_income_tax_owed = self.personal_income_tax_flat.compute_personal_income_tax_owed(
+                self.individuals, 
+                self.households,
+            )
+
+            debug = True
+            if debug:
+                # NOTE: Do not be alarmed if there is a difference. It will be reconciled at the end of the year
+                a = np.sum(personal_income_tax_paid)
+                b = total_personal_income_tax_owed
+                print(f"\t{self.country_name}: Compare paid vs owed at {self.personal_income_tax_flat.get_rate()} rate")
+                print(f"\t\ttotal_personal_income_tax_paid: ${a:,.2f}")
+                print(f"\t\ttotal_personal_income_tax_owed: ${b:,.2f}")
+                percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
+                print(f"\t\tpercent_difference: {percent_difference:.2f}% (NOTE: Difference reconciled at the end of the year)")
+
+            # calculate annual taxes and reconcile difference with timestep taxes
+            if timestep.month == 10:
+                total_annual_personal_income_tax_owed = self.personal_income_tax_flat.compute_annual_personal_income_tax_owed(
+                    timestep, 
+                    self.individuals, 
+                    self.households,
+                )
+
+        # Reorder so that taxes are downstream of overall income calculations
+        # (individual expected income & household employment income)
+
+        # Individual expected income
+        self.individuals.ts.expected_income.append(
+            self.individuals.compute_expected_income(
+                expected_firm_profits=self.firms.ts.current("expected_profits"),
+                expected_bank_profits=self.banks.ts.current("expected_profits"),
+                cpi=self.economy.ts.current("cpi")[0],
+                expected_inflation=self.economy.ts.current("estimated_cpi_inflation")[0],
+                income_taxes=self.central_government.states["Income Tax"],
+                tau_firm=self.central_government.states["Profit Tax"],
+                use_taxation_policies=self.use_taxation_policies,
+            )
+        )
+
+        # Household income
+        self.households.ts.expected_income_employee.append(
+            self.households.compute_employee_income(
+                individual_income=self.individuals.ts.current("expected_income"),
+                corr_households=self.individuals.states["Corresponding Household ID"],
+            )
         )
         self.households.ts.expected_income.append(self.households.compute_expected_income())
 
@@ -1143,6 +1207,8 @@ class Country:
             employee_social_insurance_tax=self.central_government.states["Employee Social Insurance Tax"],
             employer_social_insurance_tax=self.central_government.states["Employer Social Insurance Tax"],
             cpi=self.economy.ts.current("cpi")[0],
+            use_taxation_policies=self.use_taxation_policies,
+            individuals_personal_income_tax_owed=self.individuals.ts.current("personal_income_tax_owed"),
         )
 
         # C3. EMISSIONS AND INVENTORY
@@ -1246,6 +1312,7 @@ class Country:
                 cpi=self.economy.ts.current("cpi")[0],
                 income_taxes=self.central_government.states["Income Tax"],
                 tau_firm=self.central_government.states["Profit Tax"],
+                use_taxation_policies=self.use_taxation_policies,
             )
         )
         self.individuals.ts.income_histogram.append(get_histogram(self.individuals.ts.current("income"), self.scale))
@@ -1382,6 +1449,7 @@ class Country:
 
         # G5. GOVERNMENT REVENUE
         # General government fields
+        print(f"\t{self.country_name}: Compare taxes_income")
         self.central_government.compute_taxes(
             current_ind_employee_income=self.individuals.ts.current("employee_income"),
             current_total_rent_paid=self.households.ts.current("rent")[
@@ -1398,6 +1466,8 @@ class Country:
             taxes_less_subsidies_rates=self.central_government.states["Taxes Less Subsidies Rates"],
             current_household_new_real_wealth=self.households.ts.current("investment"),
             current_total_exports=self.economy.ts.current("exports_before_taxes").sum(),
+            use_taxation_policies=self.use_taxation_policies,
+            individuals_personal_income_tax_paid=self.individuals.ts.current("personal_income_tax_paid"),
         )
 
         # General government fields
@@ -1455,49 +1525,6 @@ class Country:
             central_government_rent_received=self.central_government.ts.current("total_rent_received")[0],
             running_multiple_countries=self.running_multiple_countries,
         )
-
-        # calculate per timestep taxes due
-        total_personal_income_tax = self.personal_income_tax_flat.compute_timestep_tax(
-            timestep, 
-            self.individuals, 
-            self.households, 
-            self.scale
-            )
-
-        # calculate annual taxes and reconcile difference with timestep taxes
-        if timestep.month == 10:
-            total_annual_personal_income_tax = self.personal_income_tax_flat.compute_annual_tax(
-                timestep, self.individuals, 
-                self.households, 
-                self.scale
-                )
-
-        ### manual test of equivalence (only works for flat tax)
-        # calculated using compute_timestep_tax()
-        output_1 = np.sum(self.individuals.ts.current("personal_income_tax_owed"))
-        # manual
-        total_taxable_income = np.sum(self.individuals.ts.current("taxable_income"))
-        output_2 = self.personal_income_tax_flat.compute_individual_tax(total_taxable_income / self.scale) * self.scale
-        print(f"test equivalence (method vs manual): {output_1 == output_2}")
-
-        ### compare new vs old pipelines
-        print("Compare calculations for this timestep:")
-        # Assumption: new pipeline uses individuals.ts.current("employee_income") as pre (not post) tax income
-        print(
-            f"\ttotal_personal_income_tax (new pipeline): " + 
-            f"${total_personal_income_tax:,.2f} " + 
-            f"at {self.personal_income_tax_flat.get_rate()} rate"
-            )
-        print(f"\ttotal_personal_income_tax (original pipeline): " +
-            f"${self.central_government.ts.current("taxes_income")[0]:,.2f} " +
-            f"at {self.central_government.states["Income Tax"]} rate"
-            )
-        a = total_personal_income_tax
-        b = self.central_government.ts.current("taxes_income")[0]
-        percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
-        print(f"\tpercent_difference: {percent_difference:.2f}%")
-
-        # print("Got here!!")
     
     def update_population_structure(self) -> None:
         """Update demographic composition.

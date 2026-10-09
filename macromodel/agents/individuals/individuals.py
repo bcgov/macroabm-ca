@@ -249,6 +249,7 @@ class Individuals(Agent):
         expected_inflation: float,
         income_taxes: float,
         tau_firm: float,
+        use_taxation_policies: bool,
     ) -> np.ndarray:
         """Calculate expected future income for individuals.
 
@@ -268,6 +269,7 @@ class Individuals(Agent):
             expected_inflation (float): Expected inflation rate
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            use_taxation_policies (bool): Toggle for taxation policies
 
         Returns:
             np.ndarray: Expected total income by individual
@@ -286,6 +288,7 @@ class Individuals(Agent):
                 dividend_payout_ratio=self.states["Dividend Payout Ratio"],
                 income_taxes=income_taxes,
                 tau_firm=tau_firm,
+                use_taxation_policies=use_taxation_policies,
             )
         ).astype(float)
 
@@ -296,6 +299,7 @@ class Individuals(Agent):
         cpi: float,
         income_taxes: float,
         tau_firm: float,
+        use_taxation_policies: bool,
     ) -> np.ndarray:
         """Calculate current period income for individuals.
 
@@ -313,6 +317,7 @@ class Individuals(Agent):
             cpi (float): Current price index
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            use_taxation_policies (bool): Toggle for taxation policies
 
         Returns:
             np.ndarray: Current total income by individual
@@ -330,6 +335,7 @@ class Individuals(Agent):
                 dividend_payout_ratio=self.states["Dividend Payout Ratio"],
                 income_taxes=income_taxes,
                 tau_firm=tau_firm,
+                use_taxation_policies=use_taxation_policies,
             )
         ).astype(float)
 

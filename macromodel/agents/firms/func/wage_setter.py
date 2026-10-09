@@ -3,6 +3,9 @@ from typing import Callable
 
 import numpy as np
 
+from macromodel.timestep import Timestep
+from macromodel.policy.personal_income_tax import PersonalIncomeTax
+
 
 class FirmWageSetter(ABC):
     """Abstract base class for determining firms' wage-setting strategies.
@@ -91,8 +94,10 @@ class FirmWageSetter(ABC):
         income_taxes: float,
         employee_social_insurance_tax: float,
         employer_social_insurance_tax: float,
+        use_taxation_policies: bool,
+        personal_income_tax_policy: PersonalIncomeTax,
         current_tfp_multiplier: np.ndarray = None,
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Set employee incomes considering all relevant factors.
 
         Determines wages based on:
@@ -122,9 +127,14 @@ class FirmWageSetter(ABC):
             income_taxes (float): Income tax rate
             employee_social_insurance_tax (float): Employee SI tax rate
             employer_social_insurance_tax (float): Employer SI tax rate
+            use_taxation_policies (bool): Toggle for taxation policies
+            personal_income_tax_policy (PersonalIncomeTax): Personal income tax policy
 
         Returns:
-            np.ndarray: Updated employee incomes
+            tuple[np.ndarray, np.ndarray, np.ndarray]: 
+                Updated employee incomes (net employ income), 
+                gross employee income, 
+                tax difference
         """
         pass
 
@@ -260,8 +270,10 @@ class WorkEffortFirmWageSetter(FirmWageSetter):
         income_taxes: float,
         employee_social_insurance_tax: float,
         employer_social_insurance_tax: float,
+        use_taxation_policies: bool,
+        personal_income_tax_policy: PersonalIncomeTax,
         current_tfp_multiplier: np.ndarray = None,
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Set employee incomes based on work effort and market conditions.
 
         Calculates wages considering:
@@ -276,7 +288,10 @@ class WorkEffortFirmWageSetter(FirmWageSetter):
             current_tfp_multiplier (np.ndarray): TFP multiplier by firm (for linking wages to tech progress)
 
         Returns:
-            np.ndarray: Updated employee incomes adjusted for all factors
+            tuple[np.ndarray, np.ndarray, np.ndarray]: 
+                Updated employee incomes adjusted for all factors (net employ income), 
+                gross employee income, 
+                tax owed
         """
         tax = (1.0 + employer_social_insurance_tax) / (
             1 - employee_social_insurance_tax - income_taxes * (1 - employee_social_insurance_tax)
@@ -314,7 +329,21 @@ class WorkEffortFirmWageSetter(FirmWageSetter):
             * initial_wage_per_capita
         )
         scaled_real_wages_by_individual[emp_ind] = scaled_real_wages[corresponding_firm[emp_ind]]
-        return scaled_real_wages_by_individual / tax
+
+        # !!!Fundamental assumption!!!: scaled_real_wages_by_individual represents pre-tax wages 
+        # (and scaled_real_wages_by_individual / tax represents post-tax wages)
+        employee_income_gross = scaled_real_wages_by_individual
+        # employer_social_insurance_tax >= 0, employee_social_insurance_tax >= 0, and income_taxes >= 0
+        # therefore tax >= 1 
+        # therefore scaled_real_wages_by_individual >= scaled_real_wages_by_individual / tax
+        if use_taxation_policies:       # Use new tax pipeline
+            personal_income_tax_owed_employment = personal_income_tax_policy.compute_withhold(employee_income_gross)
+            employee_income_net = employee_income_gross - personal_income_tax_owed_employment
+        else:                           # Use original tax pipeline
+            employee_income_net = scaled_real_wages_by_individual / tax
+            personal_income_tax_owed_employment = employee_income_gross - employee_income_net
+
+        return employee_income_net, employee_income_gross, personal_income_tax_owed_employment
 
     def get_offered_wage_given_labour_inputs_function(
         self,

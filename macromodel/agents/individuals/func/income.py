@@ -53,6 +53,7 @@ class IncomeSetter(ABC):
         dividend_payout_ratio: float,
         income_taxes: float,
         tau_firm: float,
+        use_taxation_policies: bool,
     ) -> np.ndarray:
         """Calculate expected future income for individuals.
 
@@ -69,6 +70,7 @@ class IncomeSetter(ABC):
             dividend_payout_ratio (float): Share of profits paid as dividends
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            use_taxation_policies (bool): Toggle for taxation policies
 
         Returns:
             np.ndarray: Expected income by individual
@@ -140,6 +142,7 @@ class DefaultIncomeSetter(IncomeSetter):
         dividend_payout_ratio: float,
         income_taxes: float,
         tau_firm: float,
+        use_taxation_policies: bool,
     ) -> np.ndarray:
         """Calculate expected future income for individuals.
 
@@ -165,6 +168,7 @@ class DefaultIncomeSetter(IncomeSetter):
             dividend_payout_ratio (float): Share of profits paid as dividends
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            use_taxation_policies (bool): Toggle for taxation policies
 
         Returns:
             np.ndarray: Expected income by individual
@@ -183,23 +187,26 @@ class DefaultIncomeSetter(IncomeSetter):
         nea_ind = current_individual_activity_status == ActivityStatus.NOT_ECONOMICALLY_ACTIVE
         income[nea_ind] = 0.0
 
-        # Firm investors
+        # Firm investors                # NOTE: no individual agents observed with this status
         firm_inv_ind = current_individual_activity_status == ActivityStatus.FIRM_INVESTOR
         income[firm_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
-            * (1 - tau_firm)
+            * (1 - tau_firm)            # TODO: update for explicit corporate taxes once available 
             * np.maximum(0.0, expected_firm_profits[corr_invested_firms[firm_inv_ind]])
         )
+        if not use_taxation_policies:   # Use original tax pipeline
+            income[firm_inv_ind] *= (1 - income_taxes)
 
-        # Bank investors
+        # Bank investors                # NOTE: no individual agents observed with this status
         bank_inv_ind = current_individual_activity_status == ActivityStatus.BANK_INVESTOR
         income[bank_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
-            * (1 - tau_firm)
+            * (1 - tau_firm)            # TODO: update for explicit corporate taxes once available
             * np.maximum(0.0, expected_bank_profits[corr_invested_banks[bank_inv_ind]])
         )
+        if not use_taxation_policies:   # Use original tax pipeline
+            income[bank_inv_ind] *= (1 - income_taxes)
+
         return (1 + expected_inflation) * cpi * individual_social_benefits + income
 
     def compute_income(
@@ -215,6 +222,7 @@ class DefaultIncomeSetter(IncomeSetter):
         dividend_payout_ratio: float,
         income_taxes: float,
         tau_firm: float,
+        use_taxation_policies: bool,
     ) -> np.ndarray:
         """Calculate current period income for individuals.
 
@@ -238,6 +246,7 @@ class DefaultIncomeSetter(IncomeSetter):
             dividend_payout_ratio (float): Share of profits paid as dividends
             income_taxes (float): Personal income tax rate
             tau_firm (float): Corporate tax rate
+            use_taxation_policies (bool): Toggle for taxation policies
 
         Returns:
             np.ndarray: Current income by individual
@@ -256,22 +265,24 @@ class DefaultIncomeSetter(IncomeSetter):
         nea_ind = current_individual_activity_status == ActivityStatus.NOT_ECONOMICALLY_ACTIVE
         income[nea_ind] = 0.0
 
-        # Firm investors
+        # Firm investors                # NOTE: no individual agents observed with this status
         firm_inv_ind = current_individual_activity_status == ActivityStatus.FIRM_INVESTOR
         income[firm_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
-            * (1 - tau_firm)
+            * (1 - tau_firm)            # TODO: update for explicit corporate taxes once available
             * np.maximum(0.0, firm_profits[corr_invested_firms[firm_inv_ind].astype(int)])
         )
+        if not use_taxation_policies:   # Use original tax pipeline
+            income[firm_inv_ind] *= (1 - income_taxes)
 
-        # Bank investors
+        # Bank investors                # NOTE: no individual agents observed with this status
         bank_inv_ind = current_individual_activity_status == ActivityStatus.BANK_INVESTOR
         income[bank_inv_ind] = (
             dividend_payout_ratio
-            * (1 - income_taxes)
-            * (1 - tau_firm)
+            * (1 - tau_firm)            # TODO: update for explicit corporate taxes once available
             * np.maximum(0.0, bank_profits[corr_invested_banks[bank_inv_ind].astype(int)])
         )
+        if not use_taxation_policies:   # Use original tax pipeline
+            income[bank_inv_ind] *= (1 - income_taxes)
 
         return cpi * individual_social_benefits + income
