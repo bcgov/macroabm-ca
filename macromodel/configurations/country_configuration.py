@@ -45,6 +45,7 @@ class CountryConfiguration(BaseModel):
 
     # Taxation
     use_taxation_policies: bool = False
+    policy_type: int = 0                                    # 0 = Flat, 1 = Progressive, 2=TBD
     rate_flat: list[tuple[float, float]] = [(0, 0.0)]       # default brackets are purposely bad to force user override
     rate_prog: list[tuple[float, float]] = [(0, 0.0)]       # default brackets are purposely bad to force user override
     time_unit: int = 3                                      # demo setting: 3 months per timestep = quarterly

@@ -104,7 +104,7 @@ class PersonalIncomeTax(ABC):
             if individuals.ts.current("employee_income_gross")[i] < 0:
                 raise ValueError("employee_income cannot be negative.")
             # TODO: future extension will mean individuals_taxable_income_employment != employee_income_gross
-            #       this is come when a feature to convert total income -> net income -> taxable income
+            #       this will come with a feature to convert total income -> net income -> taxable income
             individuals_taxable_income_employment[i] = individuals.ts.current("employee_income_gross")[i]   
 
             # NOTE: evidence suggests "income_from_unemployment_benefits" isn't functioning properly
@@ -308,14 +308,6 @@ class FlatRate(PersonalIncomeTax):
 
         return taxable_income * rate
 
-    # def get_rate(self) -> list[tuple[float, float]]:
-    #     """Return the taxation rate for this timestep
-
-    #     Returns:
-    #         list[tuple[float, float]]: Taxation rate as recorded as (threshold, rate)
-    #     """
-    #     return self.brackets
-
     def set_rate(self, brackets: list[tuple[float, float]]) -> None:
         """Return the taxation rate for this timestep
         
@@ -383,14 +375,6 @@ class ProgressiveRate(PersonalIncomeTax):
                 break
             
         return tax
-
-    # def get_rate(self) -> list[tuple[float, float]]:
-    #     """Return the taxation rate for this timestep
-
-    #     Returns:
-    #         list[tuple[float, float]]: Taxation rate as recorded as (threshold, rate)
-    #     """
-    #     return self.brackets
     
     def set_rate(self, brackets: list[tuple[float, float]]) -> None:
         """Return the taxation rate for this timestep

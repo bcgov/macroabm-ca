@@ -300,7 +300,7 @@ class CentralGovernment(Agent):
             use_taxation_policies (bool): Toggle for taxation policies
             individuals_personal_income_tax_paid (np.ndarray): Amount individuals paid for personal income tax
         """
-        debug = True   # Diagnostic
+        debug = False   # Diagnostic
         
         # Taxes on production
         self.ts.taxes_production.append(
