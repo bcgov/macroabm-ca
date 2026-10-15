@@ -85,5 +85,5 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         personal_income_tax_paid=np.zeros(len(data)),
         personal_income_tax_paid_employment=np.zeros(len(data)),
         personal_income_tax_paid_unemployment=np.zeros(len(data)),
-        personal_income_tax_adjustment=np.zeros(len(data)),    # TODO: implement BUT it would be zero for timesteps.month != 10
+        personal_income_tax_adjustment=np.zeros(len(data)),
     )

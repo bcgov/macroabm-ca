@@ -59,11 +59,10 @@ from macromodel.rest_of_the_world import RestOfTheWorld
 from macromodel.util.get_histogram import get_histogram
 
 from macromodel.timestep import Timestep
+# from macromodel.policy.personal_income_tax as pit     # TODO: fix to import whole package
 from macromodel.policy.personal_income_tax import PersonalIncomeTax
-from macromodel.policy.personal_income_tax import PersonalIncomeTaxProtocol
 from macromodel.policy.personal_income_tax import ProgressiveRate
 from macromodel.policy.personal_income_tax import FlatRate
-# import macromodel.policy.personal_income_tax    # try importing the whole package
 
 
 class Country:
@@ -123,8 +122,7 @@ class Country:
     assume_zero_growth: bool
     assume_zero_noise: bool
     configuration: CountryConfiguration
-    personal_income_tax_flat: Optional[FlatRate] = None
-    personal_income_tax_prog: Optional[ProgressiveRate] = None
+    personal_income_tax: Optional[PersonalIncomeTax] = None
 
     def __init__(
         self,
@@ -152,8 +150,8 @@ class Country:
         emitting_indices: Optional[np.ndarray] = None,
         emission_factors_lcu_ch4: Optional[np.ndarray] = None,
         emitting_indices_ch4: Optional[np.ndarray] = None,
-        personal_income_tax_flat: Optional[FlatRate] = None,
-        personal_income_tax_prog: Optional[ProgressiveRate] = None,
+        personal_income_tax: Optional[PersonalIncomeTax] = None,
+
     ):
         """Initialize a new country economy.
 
@@ -180,8 +178,7 @@ class Country:
             add_emissions (bool): If True, track emissions
             emission_factors_lcu (Optional[np.ndarray]): Emission factors
             emitting_indices (Optional[np.ndarray]): Industry indices that emit
-            personal_income_tax_flat (Optional[PersonalIncomeTax]): Peronal Income Tax Policy with a flat rate
-            personal_income_tax_prog (Optional[PersonalIncomeTax]): Peronal Income Tax Policy with a progressive rate
+            personal_income_tax (Optional[PersonalIncomeTax]): Peronal Income Tax Policy
         """
         # Parameters
         self.country_name = country_name
@@ -228,8 +225,7 @@ class Country:
         # Taxation
         self.use_taxation_policies = self.configuration.use_taxation_policies
         self.policy_type = self.configuration.policy_type
-        self.personal_income_tax_flat = personal_income_tax_flat
-        self.personal_income_tax_prog = personal_income_tax_prog
+        self.personal_income_tax = personal_income_tax
 
     @classmethod
     def from_pickled_country(
@@ -419,16 +415,22 @@ class Country:
         )
 
         if country_configuration.use_taxation_policies:
-            personal_income_tax_flat = FlatRate(
-                brackets=country_configuration.rate_flat,
-                scale=scale,
-                increments_per_year=int(12/country_configuration.time_unit),
-            )
-            personal_income_tax_prog = ProgressiveRate(
-                brackets=country_configuration.rate_prog,
-                scale=scale,
-                increments_per_year=int(12/country_configuration.time_unit),
-            )
+            if country_configuration.policy_type == 0:
+                personal_income_tax = FlatRate(
+                    brackets=country_configuration.rate,
+                    scale=scale,
+                    increments_per_year=int(12/country_configuration.time_unit),
+                )
+            elif country_configuration.policy_type == 1:
+                personal_income_tax = ProgressiveRate(
+                    brackets=country_configuration.rate,
+                    scale=scale,
+                    increments_per_year=int(12/country_configuration.time_unit),
+                )
+            else:
+                personal_income_tax = None
+        else:
+            personal_income_tax = None
 
         return cls(
             country_name=country_name,
@@ -455,8 +457,7 @@ class Country:
             emitting_indices=emitting_indices,
             emission_factors_lcu_ch4=emission_factors_lcu_ch4,
             emitting_indices_ch4=emitting_indices_ch4,
-            personal_income_tax_flat=personal_income_tax_flat,
-            personal_income_tax_prog=personal_income_tax_prog,
+            personal_income_tax=personal_income_tax,
         )
 
     def reset(self, configuration: CountryConfiguration) -> None:
@@ -620,18 +621,10 @@ class Country:
         )
 
         # Individuals update their income from unemployment benefits
-        if self.use_taxation_policies:
-            if self.policy_type == 0:
-                personal_income_tax_policy = self.personal_income_tax_flat
-            elif self.policy_type == 1:
-                personal_income_tax_policy = self.personal_income_tax_prog
-            else:
-                personal_income_tax_policy = None
-
         incomes_unemployement_tuple = self.central_government.distribute_unemployment_benefits_to_individuals(
             current_individual_activity_status=self.individuals.states["Activity Status"],
             use_taxation_policies=self.use_taxation_policies,
-            personal_income_tax_policy=personal_income_tax_policy,   # TODO: Replace with abstract class once configuration is implemented
+            personal_income_tax_policy=self.personal_income_tax,
         )
         unemployment_benefits_net, personal_income_tax_paid_unemployment = incomes_unemployement_tuple
         self.individuals.ts.income_from_unemployment_benefits.append(unemployment_benefits_net)
@@ -674,14 +667,6 @@ class Country:
         )
 
         # Firm wages
-        if self.use_taxation_policies:
-            if self.policy_type == 0:
-                personal_income_tax_policy = self.personal_income_tax_flat
-            elif self.policy_type == 1:
-                personal_income_tax_policy = self.personal_income_tax_prog
-            else:
-                personal_income_tax_policy = None
-
         incomes_employement_tuple = self.firms.set_employee_income(
             corresponding_firm=self.individuals.states["Corresponding Firm ID"],
             current_individual_labour_inputs=self.individuals.ts.current("labour_inputs"),
@@ -694,7 +679,7 @@ class Country:
             employee_social_insurance_tax=self.central_government.states["Employee Social Insurance Tax"],
             employer_social_insurance_tax=self.central_government.states["Employer Social Insurance Tax"],
             use_taxation_policies=self.use_taxation_policies,
-            personal_income_tax_policy=personal_income_tax_policy,   # TODO: Replace with abstract class once configuration is implemented
+            personal_income_tax_policy=self.personal_income_tax,
         )
         employee_income_net, employee_income_gross, personal_income_tax_paid_employment = incomes_employement_tuple
         
@@ -775,13 +760,7 @@ class Country:
         ### Calculate taxes after incomes 
         ### (except for household employment so the changes to individuals.ts.employee_income are downstream of spending) 
         ###
-        if self.use_taxation_policies:
-            # set policy type
-            if self.policy_type == 0:
-                personal_income_tax_policy = self.personal_income_tax_flat
-            elif self.policy_type == 1:
-                personal_income_tax_policy = self.personal_income_tax_prog
-        
+        if self.use_taxation_policies:      
             # record personal income taxes paid from all income streams
             personal_income_tax_paid = (
                 self.individuals.ts.current("personal_income_tax_paid_employment")
@@ -792,7 +771,7 @@ class Country:
 
             # calculate per timestep taxes due
             # NOTE: Must be executed after ALL income streams are assigned
-            total_personal_income_tax_owed = personal_income_tax_policy.compute_personal_income_tax_owed(
+            total_personal_income_tax_owed = self.personal_income_tax.compute_personal_income_tax_owed(
                 self.individuals, 
                 self.households,
             )
@@ -802,7 +781,7 @@ class Country:
                 # NOTE: Do not be alarmed if there is a difference. It will be reconciled at the end of the year
                 a = np.sum(personal_income_tax_paid)
                 b = total_personal_income_tax_owed
-                print(f"\t{self.country_name}: Compare paid vs owed at {personal_income_tax_policy.get_rate()} rate")
+                print(f"\t{self.country_name}: Compare paid vs owed at {self.personal_income_tax.get_rate()} rate")
                 print(f"\t\ttotal_personal_income_tax_paid: ${a:,.2f}")
                 print(f"\t\ttotal_personal_income_tax_owed: ${b:,.2f}")
                 percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
@@ -810,13 +789,13 @@ class Country:
 
             # calculate annual taxes and reconcile difference with timestep taxes
             if timestep.month == 10:
-                total_annual_personal_income_tax_owed = personal_income_tax_policy.compute_annual_personal_income_tax_owed(
+                total_annual_personal_income_tax_owed = self.personal_income_tax.compute_annual_personal_income_tax_owed(
                     timestep, 
                     self.individuals, 
                     self.households,
                 )
             else:
-                # No tax reconciliation for the other quarters
+                # No tax reconciliation for the other timesteps
                 self.individuals.ts.personal_income_tax_adjustment.append(np.zeros(self.individuals.n_individuals))
 
         # Reorder so that taxes are downstream of overall income calculations
