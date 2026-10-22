@@ -1575,6 +1575,69 @@ class Country:
 
         self.exogenous.save_to_h5(group)
 
+    def save_to_h5_limited(self, agents, h5_file: h5py.File) -> None:
+            """Save complete country state to HDF5.
+    
+            Saves the full state of all agents, markets, and economic variables
+            to an HDF5 file for later analysis or continuation.
+    
+            Args:
+                agents (list[str]): List of agents to save
+                h5_file (h5py.File): Open HDF5 file to save to
+            """
+            print(agents)
+            group = h5_file.create_group(self.country_name)
+            if agents is not None:
+                if 'firms' in agents:
+                    # print("saving firms")
+                    self.firms.save_to_h5(group)
+                    # self.firms.save_industry_firms_df(group)
+                if 'individuals' in agents:
+                    # print("saving individuals")
+                    self.individuals.save_to_h5(group)
+                if 'households' in agents:
+                    # print("saving households")
+                    self.households.save_to_h5(group)
+                    self.households.save_consumption_weights(group)
+                if 'government_entities' in agents:
+                    # print("saving government_entities")
+                    self.government_entities.save_to_h5(group)
+                if 'central_government' in agents:
+                    # print("saving central_government")
+                    self.central_government.save_to_h5(group)
+                if 'banks' in agents:
+                    # print("saving banks")
+                    self.banks.save_to_h5(group)
+                if 'central_bank' in agents:
+                    # print("saving central_bank")
+                    self.central_bank.save_to_h5(group)
+                if 'economy' in agents:
+                    # print("saving economy")
+                    self.economy.save_to_h5(group)
+                if 'markets' in agents:
+                    # print("saving markets")
+                    self.labour_market.save_to_h5(group)
+                    self.credit_market.save_to_h5(group)
+                    self.housing_market.save_to_h5(group)
+                if 'exogenous' in agents:
+                    # print("saving exogenous")
+                    self.exogenous.save_to_h5(group)
+            else:
+                self.firms.save_to_h5(group)
+                # self.firms.save_industry_firms_df(group)
+                self.individuals.save_to_h5(group)
+                self.households.save_to_h5(group)
+                self.households.save_consumption_weights(group)
+                self.government_entities.save_to_h5(group)
+                self.central_government.save_to_h5(group)
+                self.banks.save_to_h5(group)
+                self.central_bank.save_to_h5(group)
+                self.economy.save_to_h5(group)
+                self.labour_market.save_to_h5(group)
+                self.credit_market.save_to_h5(group)
+                self.housing_market.save_to_h5(group)
+                self.exogenous.save_to_h5(group)
+
     def shallow_output(self) -> pd.DataFrame:
         """Create summary DataFrame of key economic indicators.
 

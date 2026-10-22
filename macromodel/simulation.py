@@ -453,6 +453,40 @@ class Simulation:
             for country in self.countries.values():
                 country.save_to_h5(f)
 
+    def save_limited(self, countries, agents, save_dir: Path | str, file_name: str):
+        """Save the complete simulation state to an HDF5 file.
+
+        Saves all simulation data including for a limited subset of country and agent states including 
+        configuration and random seed state to a file for later analysis
+        or continuation.
+
+        Args:
+            save_dir (Path | str): Directory to save the file in
+            countries (list[str]): List of countries to save
+            agents (list[str]): List of agents to save
+            file_name (str): Name of the output file
+        """
+        if isinstance(save_dir, str):
+            save_dir = Path(save_dir)
+        with h5py.File(save_dir / file_name, "w") as f:
+            self.save_random_seed(f)
+            self.save_configuration(f)
+            # self.exchange_rates.save_to_h5(f)
+            if countries is not None:
+                if 'ROW' in countries:
+                    self.rest_of_the_world.save_to_h5(f)
+            else:
+                self.rest_of_the_world.save_to_h5(f)
+            self.goods_market.save_to_h5(f)
+            for country in self.countries.values():
+
+                if countries is not None:
+                    if country.country_name in countries:
+                        print(country.country_name)
+                        country.save_to_h5_limited(agents, f)
+                else:
+                    country.save_to_h5_limited(agents, f)
+
     def shallow_df_dict(self):
         """Create a dictionary of shallow (summary) DataFrames for each country.
 
