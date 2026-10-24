@@ -36,7 +36,7 @@ from macromodel.agents.individuals.individual_properties import (
     Education,
     Gender,
 )
-from macromodel.agents.individuals.individuals_ts import create_individuals_timeseries
+from macromodel.agents.individuals.individuals_ts import create_individuals_timeseries, create_individuals_states_timeseries
 from macromodel.configurations import IndividualsConfiguration
 from macromodel.timeseries import TimeSeries
 from macromodel.util.function_mapping import functions_from_model, update_functions
@@ -195,6 +195,9 @@ class Individuals(Agent):
             states["Corresponding Invested Bank"] = states["Corresponding Invested Bank"].astype(int)
             states["Corresponding Invested Bank"][states["Corresponding Invested Bank"] < 0] = -1
 
+        ts_states = create_individuals_states_timeseries(states)
+        ts.concat(ts_states)
+        
         return cls(country_name, all_country_names, n_industries, functions, ts, states)
 
     def reset(self, configuration: IndividualsConfiguration):

@@ -18,6 +18,9 @@ to analyze:
 import pandas as pd
 import numpy as np
 
+from typing import Any
+from enum import Enum
+
 from macromodel.timeseries import TimeSeries
 from macromodel.util.get_histogram import get_histogram
 
@@ -87,3 +90,40 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         personal_income_tax_paid_unemployment=np.zeros(len(data)),
         personal_income_tax_adjustment=np.zeros(len(data)),
     )
+
+def create_individuals_states_timeseries(
+    states: dict[str, float | np.ndarray | list[np.ndarray] | Any],
+    
+) -> TimeSeries:
+    """Create time series for tracking individual state variables.
+
+    Initializes tracking for state variables
+
+    Args:
+        states (dict[str, float | np.ndarray | list[np.ndarray] | Any]): Agent states
+
+    Returns:
+        TimeSeries: Initialized time series for individual variables
+    """
+    return TimeSeries(
+        education = convert_enum_to_numpy(states["Education"]),             # necessary for states in individual_properties.py
+        activity_status = convert_enum_to_numpy(states["Activity Status"]), # necessary for states in individual_properties.py
+        employment_industry = np.where(np.isnan(states["Employment Industry"]), -1, states["Employment Industry"].astype(int)),
+        corr_hh = states["Corresponding Household ID"],
+    )
+
+def convert_enum_to_numpy(temp_enum: list[Enum])-> np.ndarray:
+    """Convert Enum class values to int
+
+    Args:
+        temp_enum (list[Enum]): Emum list
+
+    Returns:
+        temp_np: numpy array of Enum values
+    """
+
+    temp_np = np.empty(len(temp_enum), np.int8)
+    for i in range(len(temp_enum)):
+        temp_np[i] = int(temp_enum[i].value)
+
+    return temp_np

@@ -18,7 +18,8 @@ The implementation handles:
 - Financial flows
 """
 
-from typing import Optional
+from typing import Optional, Any
+from enum import Enum
 
 import numpy as np
 import pandas as pd
@@ -185,3 +186,41 @@ def create_households_timeseries(
         oil_investment_emissions=oil_investment_emissions,
         refined_products_investment_emissions=refined_products_investment_emissions,
     )
+
+def create_households_state_timeseries(
+    states: dict[str, float | np.ndarray | list[np.ndarray] | Any],
+    
+) -> TimeSeries:
+    """Create time series for tracking household state variables.
+
+    Initializes tracking for state variables
+
+    Args:
+        states (dict[str, float | np.ndarray | list[np.ndarray] | Any]): Agent states
+
+    Returns:
+        TimeSeries: Initialized time series for household variables
+    """
+    return TimeSeries(
+        n_adults = states["Number of Adults"],
+        hh_type = convert_enum_to_numpy(states["Type"]),    # necessary for states in household_properties.py
+        # corr_individuals = states["corr_individuals"],    # inhomogeneous shape which is incompatible with .h5
+        # corr_renters = states["corr_renters"],            # inhomogeneous shape which is incompatible with .h5
+        corr_property_owner = states["Corresponding Property Owner"],
+    )
+
+def convert_enum_to_numpy(temp_enum: list[Enum])-> np.ndarray:
+    """Convert Enum class values to int
+
+    Args:
+        temp_enum (list[Enum]): Emum list
+
+    Returns:
+        temp_np: numpy array of Enum values
+    """
+    
+    temp_np = np.empty(len(temp_enum), np.int8)
+    for i in range(len(temp_enum)):
+        temp_np[i] = int(temp_enum[i].value)
+
+    return temp_np

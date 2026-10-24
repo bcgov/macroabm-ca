@@ -77,6 +77,22 @@ class TimeSeries:
         """
         return self.dicts[item][0]
 
+    def concat(self, ts: "TimeSeries") -> "TimeSeries":
+        """Append time series with non-matching keys to this one.
+
+         Args:
+            ts (TimeSeries): time series to append
+        """
+        if not isinstance(ts, TimeSeries):
+            raise TypeError("ts must be a TimeSeries instance")
+
+        duplicate_keys = self.dicts.keys() & ts.dicts.keys()
+        if duplicate_keys:
+            raise ValueError(f"TimeSeries keys already exist: {sorted(duplicate_keys)}")
+
+        for key, values in ts.dicts.items():
+            self.dicts[key] = values.copy()
+
     def current(self, item):
         """Get the most recent value of a time series.
 

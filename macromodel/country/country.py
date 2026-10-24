@@ -1575,7 +1575,7 @@ class Country:
 
         self.exogenous.save_to_h5(group)
 
-    def save_to_h5_limited(self, agents, h5_file: h5py.File) -> None:
+    def save_to_h5_selective(self, agents, h5_file: h5py.File) -> None:
             """Save complete country state to HDF5.
     
             Saves the full state of all agents, markets, and economic variables

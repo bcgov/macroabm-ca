@@ -29,7 +29,7 @@ from macro_data.readers.emission_fraction.emission_fraction_reader import Emissi
 from macromodel.agents.agent import Agent
 from macromodel.agents.banks.banks import Banks
 from macromodel.agents.households.household_properties import HouseholdType
-from macromodel.agents.households.households_ts import create_households_timeseries
+from macromodel.agents.households.households_ts import create_households_timeseries, create_households_state_timeseries
 from macromodel.agents.households.utils.create_bundle_matrix import create_bundle_matrix
 from macromodel.configurations import HouseholdsConfiguration
 from macromodel.markets.credit_market.credit_market import CreditMarket
@@ -339,6 +339,9 @@ class Households(Agent):
         independents = configuration.functions.saving_rates.parameters["independents"]
 
         # TODO: corresponding additionally owned houses is not used
+
+        ts_state = create_households_state_timeseries(states)
+        ts.concat(ts_state)       
 
         return cls(
             country_name,

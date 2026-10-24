@@ -453,7 +453,7 @@ class Simulation:
             for country in self.countries.values():
                 country.save_to_h5(f)
 
-    def save_limited(self, countries, agents, save_dir: Path | str, file_name: str):
+    def save_selective(self, countries, agents, save_dir: Path | str, file_name: str):
         """Save the complete simulation state to an HDF5 file.
 
         Saves all simulation data including for a limited subset of country and agent states including 
@@ -483,9 +483,9 @@ class Simulation:
                 if countries is not None:
                     if country.country_name in countries:
                         print(country.country_name)
-                        country.save_to_h5_limited(agents, f)
+                        country.save_to_h5_selective(agents, f)
                 else:
-                    country.save_to_h5_limited(agents, f)
+                    country.save_to_h5(f)
 
     def shallow_df_dict(self):
         """Create a dictionary of shallow (summary) DataFrames for each country.
