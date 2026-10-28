@@ -60,6 +60,7 @@ from macro_data.readers.population_data.compustat_firms_reader import (
 from macro_data.readers.population_data.hfcs_reader import HFCSReader
 from macro_data.readers.socioeconomic_data.wiod_sea_data import WIODSEAReader
 from macro_data.readers.util.prune_util import DataFilterWarning
+from macro_data.readers.taxation.personal_income_tax.personal_income_tax_reader import PersonalIncomeTaxReader
 
 
 @dataclass
@@ -90,6 +91,7 @@ class DataPaths:
         compustat_firms_quarterly_path (Path): Path to quarterly Compustat firms data
         compustat_banks_path (Path): Path to Compustat banks data
         emissions_path (Path): Path to emissions data
+        personal_income_tax_brackets_path (Path): Path to personal income tax data
     """
 
     goods_criticality_path: Path
@@ -114,6 +116,7 @@ class DataPaths:
     emissions_fraction_path: Optional[Path] = None
     firm_prices_path: Optional[Path] = None
     ch4_emissions_path: Optional[Path] = None
+    personal_income_tax_brackets_path: Optional[Path] = None
 
     @classmethod
     def default_paths(cls, raw_data_path: Path, icio_years: Iterable[int]):
@@ -151,6 +154,8 @@ class DataPaths:
             ch4_emissions_path=raw_data_path
             / "emission_factors"
             / "EN-GHG_EconSectByGas-CA_Emissions_2014_2023_v4.csv",
+            personal_income_tax_brackets_path=raw_data_path 
+            / "taxation" / "personal_income_tax" / "personal_income_tax-rates_thresholds.csv",
         )
 
     # @classmethod
@@ -208,6 +213,7 @@ class DataReaders:
     exo_prices: Optional[SectorExoPricesReader] = None
     ch4_emissions: Optional[CH4EmissionsReaderCAN] = None
     regions_dict: Optional[dict[Country, list[Region]]] = None
+    personal_income_tax_brackets: Optional[PersonalIncomeTaxReader] = None
 
     @classmethod
     def from_raw_data(
@@ -491,6 +497,10 @@ class DataReaders:
         if datapaths.ch4_emissions_path is not None and datapaths.ch4_emissions_path.exists():
             ch4_emissions = CH4EmissionsReaderCAN.read_data(datapaths.ch4_emissions_path)
 
+        personal_income_tax_brackets = None
+        if datapaths.personal_income_tax_brackets_path is not None and datapaths.personal_income_tax_brackets_path.exists():
+            personal_income_tax_brackets = PersonalIncomeTaxReader.read_from_raw_data(datapaths.personal_income_tax_brackets_path)
+
         return cls(
             icio=icio,
             wiod_sea=wiod_sea,
@@ -511,6 +521,7 @@ class DataReaders:
             exo_prices=exo_prices,
             ch4_emissions=ch4_emissions,
             regions_dict=regions_dict,
+            personal_income_tax_brackets=personal_income_tax_brackets,
         )
 
     @classmethod

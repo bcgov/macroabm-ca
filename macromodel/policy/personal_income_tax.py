@@ -5,6 +5,7 @@ from macromodel.agents.households.households import Households
 from macromodel.agents.individuals.individuals import Individuals
 from macromodel.agents.individuals.individual_properties import ActivityStatus
 import numpy as np
+import pandas as pd 
 # import inspect
 
 class PersonalIncomeTax(ABC):
@@ -15,7 +16,12 @@ class PersonalIncomeTax(ABC):
         - Reviewing taxation rates
         - Updating taxation rates
         - Computing total tax imputed by all individual agents
+    
+    Attributes:
+            timeseries (pd.DataFrame): Threshold and rate data associated with country for a set of years
     """
+
+    bracket_timeseries:pd.DataFrame = None
 
     def __init__(self, brackets: list[tuple[float, float]], scale: int, increments_per_year: int):
         """Initialize abstract personal income tax policy.
@@ -343,8 +349,6 @@ class ProgressiveRate(PersonalIncomeTax):
         """
         if not brackets:
             raise ValueError("ProgressiveRate brackets cannot be empty.")
-        if len(brackets) < 2:
-            raise ValueError("ProgressiveRate must have more than one bracket.")
         if brackets[-1][0] != float('inf'):
             raise ValueError("ProgressiveRate final bracket threshold must be float('inf').")
         for threshold, rate in brackets:

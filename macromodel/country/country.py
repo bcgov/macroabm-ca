@@ -33,6 +33,7 @@ to their behavioral rules and interactions.
 import logging
 from copy import deepcopy
 from typing import Optional
+from enum import Enum
 
 import h5py
 import numpy as np
@@ -414,23 +415,53 @@ class Country:
             scale=scale,
         )
 
-        if country_configuration.use_taxation_policies:
-            if country_configuration.policy_type == 0:
-                personal_income_tax = FlatRate(
-                    brackets=country_configuration.rate,
-                    scale=scale,
-                    increments_per_year=int(12/country_configuration.time_unit),
-                )
-            elif country_configuration.policy_type == 1:
-                personal_income_tax = ProgressiveRate(
-                    brackets=country_configuration.rate,
-                    scale=scale,
-                    increments_per_year=int(12/country_configuration.time_unit),
-                )
-            else:
-                personal_income_tax = None
+        if country_configuration.use_taxation_policies and synthetic_country.personal_income_tax_brackets is not None:
+
+            brackets_all = synthetic_country.personal_income_tax_brackets.brackets
+            bracket_country = brackets_all[(brackets_all['jurisdiction'] == country_name)]
+            bracket_country_year = bracket_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
+
+            bracket_country_year["upper"] = bracket_country_year["upper"].map(
+                lambda x: float('inf') if isinstance(x, str) and x.strip() == "float('inf')" else float(x)
+            )
+
+            try:
+                bracket_list = [
+                    (u, float(r))
+                    for u, r in zip(bracket_country_year["upper"], bracket_country_year["rate"])
+                ]
+            except (ValueError, TypeError) as e:
+                print(f"Error converting values: {e}")
+                bracket_list = country_configuration.rate
+            
+            personal_income_tax = ProgressiveRate(
+                brackets=bracket_list,
+                scale=scale,
+                increments_per_year=int(12/country_configuration.time_unit),
+            )
+
+            personal_income_tax.bracket_timeseries = bracket_country
         else:
             personal_income_tax = None
+
+        # ### OLD personal income tax initialization method # NOTE: keep for user-overwrite?
+        # if country_configuration.use_taxation_policies:
+        #     if country_configuration.policy_type == 0:
+        #         personal_income_tax = FlatRate(
+        #             brackets=country_configuration.rate,
+        #             scale=scale,
+        #             increments_per_year=int(12/country_configuration.time_unit),
+        #         )
+        #     elif country_configuration.policy_type == 1:
+        #         personal_income_tax = ProgressiveRate(
+        #             brackets=country_configuration.rate,
+        #             scale=scale,
+        #             increments_per_year=int(12/country_configuration.time_unit),
+        #         )
+        #     else:
+        #         personal_income_tax = None
+        # else:
+        #     personal_income_tax = None
 
         return cls(
             country_name=country_name,
@@ -1403,6 +1434,16 @@ class Country:
         self.economy.ts.npl_hh_cons_loans.append([npl_hh_cons_loans])
         self.economy.ts.npl_mortgages.append([npl_mortgages])
 
+        # F3. INDIVIDUAL AND HOUSEHOLD STATES TIMESERIES
+        self.individuals.ts.education.append(self.convert_enum_to_numpy(self.individuals.states["Education"]))
+        self.individuals.ts.activity_status.append(self.convert_enum_to_numpy(self.individuals.states["Activity Status"]))
+        self.individuals.ts.employment_industry.append(np.nan_to_num(self.individuals.states["Employment Industry"], nan=-1))
+        self.individuals.ts.corr_hh.append(self.individuals.states["Corresponding Household ID"])
+
+        self.households.ts.n_adults.append(self.households.states["Number of Adults"])
+        self.households.ts.hh_type.append(self.convert_enum_to_numpy(self.households.states["Type"]))
+        self.households.ts.corr_property_owner.append(self.households.states["Corresponding Property Owner"])
+
         # G1. GOVERNMENT AND BANKING
         # Update government consumption
         self.government_entities.record_consumption(
@@ -1547,6 +1588,50 @@ class Country:
         """
         return [self.firms, self.households, self.government_entities]
 
+    def set_next_brackets(self, year:int) -> None:
+        """Set personal income tax brackets for a certain year.
+            
+            Args:
+                year (int): Year
+            """
+        if self.personal_income_tax.bracket_timeseries is not None:
+            bracket_timeseries_year = self.personal_income_tax.bracket_timeseries.loc[[year]] # pass index as list ensures dataframe (not a series) returned
+        else:
+            raise ValueError("self.personal_income_tax.bracket_timeseries is empty.") 
+        
+        bracket_timeseries_year["upper"] = bracket_timeseries_year["upper"].map(
+            lambda x: float('inf') if isinstance(x, str) and x.strip() == "float('inf')" else float(x)
+        )
+
+        try:
+            bracket_list = [
+                (u, float(r))
+                for u, r in zip(bracket_timeseries_year["upper"], bracket_timeseries_year["rate"])
+            ]
+        except (ValueError, TypeError) as e:
+            print(f"Error converting values: {e}")
+            bracket_list = [(float('inf'), 0.09)]       # model default fall-back
+
+        # print(f"{self.country_name}: previous bracket {self.personal_income_tax.get_rate()}")
+        self.personal_income_tax.set_rate(bracket_list)
+        # print(f"{self.country_name}: updated bracket  {self.personal_income_tax.get_rate()}")
+
+    def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
+        """Convert Enum class values to int
+
+        Args:
+            temp_enum (list[Enum]): Emum list
+
+        Returns:
+            temp_np: numpy array of Enum values
+        """
+        
+        temp_np = np.empty(len(temp_enum), np.int8)
+        for i in range(len(temp_enum)):
+            temp_np[i] = int(temp_enum[i].value)
+
+        return temp_np
+    
     def save_to_h5(self, h5_file: h5py.File) -> None:
         """Save complete country state to HDF5.
 
