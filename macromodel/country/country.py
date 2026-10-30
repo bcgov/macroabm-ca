@@ -416,31 +416,46 @@ class Country:
         )
 
         if country_configuration.use_taxation_policies and synthetic_country.personal_income_tax_brackets is not None:
+            if country_configuration.simple_bracket is None:
+                brackets_all = synthetic_country.personal_income_tax_brackets.brackets
+                bracket_country = brackets_all[(brackets_all['jurisdiction'] == country_name)]
+                bracket_country_year = bracket_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
 
-            brackets_all = synthetic_country.personal_income_tax_brackets.brackets
-            bracket_country = brackets_all[(brackets_all['jurisdiction'] == country_name)]
-            bracket_country_year = bracket_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
+                bracket_country_year["upper"] = bracket_country_year["upper"].map(
+                    lambda x: float('inf') if isinstance(x, str) and x.strip() == "float('inf')" else float(x)
+                )
 
-            bracket_country_year["upper"] = bracket_country_year["upper"].map(
-                lambda x: float('inf') if isinstance(x, str) and x.strip() == "float('inf')" else float(x)
-            )
+                try:
+                    bracket_list = [
+                        (u, float(r))
+                        for u, r in zip(bracket_country_year["upper"], bracket_country_year["rate"])
+                    ]
+                except (ValueError, TypeError) as e:
+                    print(f"synthetic_country.personal_income_tax_brackets: Error converting values: {e}")
+                    bracket_list = country_configuration.simple_bracket
+                
+                personal_income_tax = ProgressiveRate(
+                    brackets=bracket_list,
+                    scale=scale,
+                    increments_per_year=int(12/country_configuration.time_unit),
+                )
 
-            try:
-                bracket_list = [
-                    (u, float(r))
-                    for u, r in zip(bracket_country_year["upper"], bracket_country_year["rate"])
-                ]
-            except (ValueError, TypeError) as e:
-                print(f"Error converting values: {e}")
-                bracket_list = country_configuration.rate
-            
-            personal_income_tax = ProgressiveRate(
-                brackets=bracket_list,
-                scale=scale,
-                increments_per_year=int(12/country_configuration.time_unit),
-            )
-
-            personal_income_tax.bracket_timeseries = bracket_country
+                personal_income_tax.bracket_timeseries = bracket_country
+            else:
+                if country_configuration.policy_type == 0:
+                    personal_income_tax = FlatRate(
+                        brackets=country_configuration.simple_bracket,
+                        scale=scale,
+                        increments_per_year=int(12/country_configuration.time_unit),
+                )
+                elif country_configuration.policy_type == 1:
+                    personal_income_tax = ProgressiveRate(
+                        brackets=country_configuration.simple_bracket,
+                        scale=scale,
+                        increments_per_year=int(12/country_configuration.time_unit),
+                    )
+                else:
+                    personal_income_tax = None
         else:
             personal_income_tax = None
 
@@ -1588,7 +1603,7 @@ class Country:
         """
         return [self.firms, self.households, self.government_entities]
 
-    def set_next_brackets(self, year:int) -> None:
+    def update_brackets(self, year:int) -> None:
         """Set personal income tax brackets for a certain year.
             
             Args:

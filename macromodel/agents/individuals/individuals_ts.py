@@ -108,7 +108,7 @@ def create_individuals_states_timeseries(
     return TimeSeries(
         education = convert_enum_to_numpy(states["Education"]),             # necessary for states in individual_properties.py
         activity_status = convert_enum_to_numpy(states["Activity Status"]), # necessary for states in individual_properties.py
-        employment_industry = np.where(np.isnan(states["Employment Industry"]), -1, states["Employment Industry"].astype(int)),
+        employment_industry = np.nan_to_num(states["Employment Industry"], nan=-1),
         corr_hh = states["Corresponding Household ID"],
     )
 

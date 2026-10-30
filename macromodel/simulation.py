@@ -374,7 +374,7 @@ class Simulation:
         # Update taxation policies for new timestep
         if self.timestep.month == 1:
             for country in self.countries.values():
-                country.set_next_brackets(self.timestep.year)
+                country.update_brackets(self.timestep.year)
 
     @property
     def aggregate_nominal_production(self) -> float:

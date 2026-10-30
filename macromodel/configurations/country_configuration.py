@@ -44,10 +44,11 @@ class CountryConfiguration(BaseModel):
     CH4_production_emissions_only: bool = False
 
     # Taxation
-    use_taxation_policies: bool = False                     # Off by default
-    policy_type: int = 0                                    # Flag for policy type: 0 = Flat, 1 = Progressive, 2=TBD
-    rate: list[tuple[float, float]] = [(0, 0.0)]            # Default brackets are purposely bad to force user override
-    time_unit: int = 3                                      # Demo setting: 3 months per timestep = quarterly
+    use_taxation_policies: bool = False                         # Off by default
+    policy_type: int = 0                                        # Flag for policy type: 0 = Flat, 1 = Progressive, 2=TBD
+    simple_bracket: Optional[list[tuple[float, float]]] = None  # If set to None then country.from_pickled_country() 
+                                                                #       will use brackets from PersonalIncomeTaxReader
+    time_unit: int = 3                                          # Demo setting: 3 months per timestep = quarterly
 
     @classmethod
     def n_industry_default(
