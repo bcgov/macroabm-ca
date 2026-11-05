@@ -375,6 +375,7 @@ class Simulation:
         if self.timestep.month == 1:
             for country in self.countries.values():
                 country.update_brackets(self.timestep.year)
+                country.update_credits(self.timestep.year)
 
     @property
     def aggregate_nominal_production(self) -> float:

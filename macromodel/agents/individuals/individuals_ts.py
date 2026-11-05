@@ -78,16 +78,18 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         reservation_wages=data["Employee Income"].values + data["Income from Unemployment Benefits"].values,
 
         # Personal Income Tax
-        employee_income_gross=np.zeros(len(data)),
-        taxable_income=np.zeros(len(data)),
-        taxable_income_employment=np.zeros(len(data)),
-        taxable_income_unemployment=np.zeros(len(data)),
+        employee_income_gross=data["Income from Unemployment Benefits"].values,
+        taxable_income=data["Employee Income"].values,                                  # TODO: find a better start value
+        taxable_income_employment=data["Employee Income"].values,                       # TODO: find a better start value
+        taxable_income_unemployment=data["Income from Unemployment Benefits"].values,   # TODO: find a better start value
         taxable_income_rental=np.zeros(len(data)),
-        # taxable_income_investment=np.zeros(len(data)),         # TODO: implement once other income streams are working
+        # taxable_income_investment=np.zeros(len(data)),            # TODO: implement once other income streams are working
         personal_income_tax_owed=np.zeros(len(data)),
         personal_income_tax_paid=np.zeros(len(data)),
         personal_income_tax_paid_employment=np.zeros(len(data)),
         personal_income_tax_paid_unemployment=np.zeros(len(data)),
+        # personal_income_tax_paid_rent=np.zeros(len(data)),        # TODO: implement once other income streams are working
+        # personal_income_tax_paid_investment=np.zeros(len(data)),  # TODO: implement once other income streams are working
         personal_income_tax_adjustment=np.zeros(len(data)),
     )
 

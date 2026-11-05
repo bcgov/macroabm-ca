@@ -280,8 +280,14 @@ class Individuals(Agent):
         return (
             self.functions["income"].compute_expected_income(
                 current_individual_activity_status=self.states["Activity Status"],
-                current_wage=self.ts.current("employee_income"),
-                individual_social_benefits=self.ts.current("income_from_unemployment_benefits"),
+                current_wage=(
+                    self.ts.current("employee_income") 
+                    - self.ts.current("personal_income_tax_adjustment")
+                ),
+                individual_social_benefits=(
+                    self.ts.current("income_from_unemployment_benefits") 
+                    - self.ts.current("personal_income_tax_adjustment")
+                ),
                 expected_firm_profits=expected_firm_profits,
                 corr_invested_firms=self.states["Corresponding Invested Firm"],
                 expected_bank_profits=expected_bank_profits,
@@ -328,8 +334,14 @@ class Individuals(Agent):
         return (
             self.functions["income"].compute_income(
                 current_individual_activity_status=self.states["Activity Status"],
-                current_wage=self.ts.current("employee_income"),
-                individual_social_benefits=self.ts.current("income_from_unemployment_benefits"),
+                current_wage=(
+                    self.ts.current("employee_income")
+                    - self.ts.current("personal_income_tax_adjustment")
+                ),
+                individual_social_benefits=(
+                    self.ts.current("income_from_unemployment_benefits")
+                    - self.ts.current("personal_income_tax_adjustment")
+                ),
                 firm_profits=firm_profits,
                 corr_invested_firms=self.states["Corresponding Invested Firm"],
                 bank_profits=bank_profits,

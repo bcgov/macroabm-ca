@@ -985,7 +985,7 @@ class Firms(Agent):
         employer_social_insurance_tax: float,
         cpi: float,
         use_taxation_policies: bool,
-        individuals_personal_income_tax_owed: np.ndarray,
+        individuals_personal_income_tax_paid: np.ndarray,
     ) -> None:
         """Update total wage payments including taxes and adjustments.
 
@@ -1003,7 +1003,7 @@ class Firms(Agent):
             employer_social_insurance_tax (float): Employer SI tax rate
             cpi (float): Consumer price index
             use_taxation_policies (bool): Toggle for taxation policies
-            individuals_personal_income_tax_owed (np.ndarray): Amount individuals owe for personal income tax
+            individuals_personal_income_tax_paid (np.ndarray): Amount individuals paid for personal income tax
         """
         debug = False   # Diagnostics
         
@@ -1016,7 +1016,7 @@ class Firms(Agent):
         if use_taxation_policies:   # Use new tax pipeline (pre-tax wage)
             firm_personal_income_tax = np.bincount(
                 corresponding_firm[corresponding_firm >= 0],
-                weights=individuals_personal_income_tax_owed[corresponding_firm >= 0],
+                weights=individuals_personal_income_tax_paid[corresponding_firm >= 0],
                 minlength=self.ts.current("n_firms"),
             )
             final_wages = cpi * (real_wages + firm_personal_income_tax)

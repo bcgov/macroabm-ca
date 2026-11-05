@@ -330,7 +330,7 @@ class WorkEffortFirmWageSetter(FirmWageSetter):
         )
         scaled_real_wages_by_individual[emp_ind] = scaled_real_wages[corresponding_firm[emp_ind]]
 
-        # !!!Fundamental assumption!!!: scaled_real_wages_by_individual represents pre-tax wages 
+        # NOTE: !!!Fundamental assumption!!!: scaled_real_wages_by_individual represents pre-tax wages 
         # (and scaled_real_wages_by_individual / tax represents post-tax wages)
         employee_income_gross = scaled_real_wages_by_individual
         # employer_social_insurance_tax >= 0, employee_social_insurance_tax >= 0, and income_taxes >= 0

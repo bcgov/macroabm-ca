@@ -64,6 +64,7 @@ from macromodel.timestep import Timestep
 from macromodel.policy.personal_income_tax import PersonalIncomeTax
 from macromodel.policy.personal_income_tax import ProgressiveRate
 from macromodel.policy.personal_income_tax import FlatRate
+from macromodel.policy.personal_income_tax import PersonalIncomeTaxCredit
 
 
 class Country:
@@ -416,7 +417,10 @@ class Country:
         )
 
         if country_configuration.use_taxation_policies and synthetic_country.personal_income_tax_brackets is not None:
+            # import bracket timeseries
             if country_configuration.simple_bracket is None:
+                # TODO: .\raw_data\taxation\personal_income_tax-rates_thresholds.csv 
+                #       needs to be reviewed for accuracy (LS did not compile or verify)
                 brackets_all = synthetic_country.personal_income_tax_brackets.brackets
                 bracket_country = brackets_all[(brackets_all['jurisdiction'] == country_name)]
                 bracket_country_year = bracket_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
@@ -440,8 +444,9 @@ class Country:
                     increments_per_year=int(12/country_configuration.time_unit),
                 )
 
-                personal_income_tax.bracket_timeseries = bracket_country
-            else:
+                personal_income_tax.bracket_timeseries = bracket_country # store complete timeseries for this country
+
+            else:   # set static simple brackets for testing purposes only
                 if country_configuration.policy_type == 0:
                     personal_income_tax = FlatRate(
                         brackets=country_configuration.simple_bracket,
@@ -454,29 +459,40 @@ class Country:
                         scale=scale,
                         increments_per_year=int(12/country_configuration.time_unit),
                     )
-                else:
-                    personal_income_tax = None
+                else:   # if no static simle brackets and no policy_type were provided
+                    raise ValueError("simple_bracket is None and policy_type is not set.")
+
+            # import credit policies
+            if personal_income_tax is not None:
+                # TODO: .\raw_data\taxation\personal_income_taxpersonal_income_tax-non_refundable_tax_credits.csv 
+                #       needs to be reviewed for accuracy (LS did not compile or verify) - especially "Dependant Amount" values
+                credits_all = synthetic_country.personal_income_tax_credits.credits
+                credits_country = credits_all[(credits_all['jurisdiction'] == country_name)]
+                credits_country_year = credits_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
+
+                personal_income_tax.credit_timeseries = credits_country # store complete timeseries for this country
+
+                # NOTE: storing as dict allows the credit types to change year to year 
+                #       (ie credit types can be introduced/removed part way through simulation)
+                # NOTE: PersonalIncomeTax.compute_individual_nonrefundable_credits() needs to be updated to process new credits
+                #       beyond "Age Amount", "Dependant Amount", "Personal Amount", and "Spousal Amount"
+                credit_list = credits_country_year['credit'].values     # store credit types 
+
+                for credit in credit_list:
+                    credit_data = credits_country_year.loc[credits_country_year['credit'] == credit]
+
+                    personal_income_tax.credits[credit] = PersonalIncomeTaxCredit(
+                        amount = credit_data.amount.values[0], 
+                        top = credit_data.top.values[0], 
+                        rate = credit_data.rate.values[0], 
+                        clawback = credit_data.clawback.values[0], 
+                        clawback_rate = credit_data.clawback_rate.values[0], 
+                        indexed = credit_data.indexed.values[0],
+                    )
+
+                    # print(f"personal_income_tax.credits[{credit}].amount {personal_income_tax.credits[credit].amount}")
         else:
             personal_income_tax = None
-
-        # ### OLD personal income tax initialization method # NOTE: keep for user-overwrite?
-        # if country_configuration.use_taxation_policies:
-        #     if country_configuration.policy_type == 0:
-        #         personal_income_tax = FlatRate(
-        #             brackets=country_configuration.rate,
-        #             scale=scale,
-        #             increments_per_year=int(12/country_configuration.time_unit),
-        #         )
-        #     elif country_configuration.policy_type == 1:
-        #         personal_income_tax = ProgressiveRate(
-        #             brackets=country_configuration.rate,
-        #             scale=scale,
-        #             increments_per_year=int(12/country_configuration.time_unit),
-        #         )
-        #     else:
-        #         personal_income_tax = None
-        # else:
-        #     personal_income_tax = None
 
         return cls(
             country_name=country_name,
@@ -794,7 +810,7 @@ class Country:
         self.households.ts.income_rental.append(
             self.households.compute_rental_income(
                 housing_data=self.housing_market.states["properties"],
-                income_taxes=self.central_government.states["Income Tax"],
+                income_taxes=self.central_government.states["Income Tax"],      # TODO: updated for brackets
             )
         )
         self.households.ts.total_income_rental.append([self.households.ts.current("income_rental").sum()])
@@ -807,42 +823,82 @@ class Country:
         ### (except for household employment so the changes to individuals.ts.employee_income are downstream of spending) 
         ###
         if self.use_taxation_policies:      
-            # record personal income taxes paid from all income streams
+            # Calculate personal income taxes paid upfront from all income streams
             personal_income_tax_paid = (
                 self.individuals.ts.current("personal_income_tax_paid_employment")
                 + self.individuals.ts.current("personal_income_tax_paid_unemployment")
-                # + self.individuals.ts.current("personal_income_tax_paid_rent")
+                # + self.individuals.ts.current("personal_income_tax_paid_rent")        # TODO: implement once market working
+                # + self.individuals.ts.current("personal_income_tax_paid_investment")  # TODO: implement once market working
             )
             self.individuals.ts.personal_income_tax_paid.append(personal_income_tax_paid)
 
-            # calculate per timestep taxes due
-            # NOTE: Must be executed after ALL income streams are assigned
-            total_personal_income_tax_owed = self.personal_income_tax.compute_personal_income_tax_owed(
-                self.individuals, 
-                self.households,
+            # Calculate taxable incomes
+            self.personal_income_tax.new_compute_taxable_income(
+                individuals=self.individuals,
+                households=self.households,
             )
+
+            # Calculate annual tax values
+            annual_taxable_income = np.zeros(self.individuals.n_individuals)
+            annual_personal_income_tax_paid = np.zeros(self.individuals.n_individuals)
+            if timestep.month != 10:
+                annual_personal_income_tax_paid = (
+                    self.individuals.ts.current("personal_income_tax_paid") * self.personal_income_tax.increments_per_year
+                )
+                annual_taxable_income = (
+                    self.individuals.ts.current("taxable_income") * self.personal_income_tax.increments_per_year
+                )
+            else:
+                t = len(self.individuals.ts.employee_income) - 1     # current timestep index
+                for i in range(self.individuals.n_individuals):
+                    for s in range(self.personal_income_tax.increments_per_year):
+                        # calculate taxes already paid for the year
+                        annual_personal_income_tax_paid[i] += self.individuals.ts.personal_income_tax_paid[t - s][i]
+        
+                        # calculate actual annual earnings
+                        annual_taxable_income[i] += self.individuals.ts.taxable_income[t - s][i]  
+
+            # Calculate taxes owed and reconcile
+            self.personal_income_tax.new_compute_personal_income_tax_owed(
+                annual_taxable_income=annual_taxable_income,
+                annual_personal_income_tax_paid=annual_personal_income_tax_paid,
+                individuals=self.individuals,
+                households=self.households,
+            ) 
+
+            # # calculate per timestep taxes due
+            # # NOTE: Must be executed after ALL income streams are assigned
+            # total_personal_income_tax_owed = self.personal_income_tax.compute_personal_income_tax_owed(
+            #     self.individuals, 
+            #     self.households,
+            # )
 
             debug = False
             if debug:
-                # NOTE: Do not be alarmed if there is a difference. It will be reconciled at the end of the year
-                a = np.sum(personal_income_tax_paid)
-                b = total_personal_income_tax_owed
-                print(f"\t{self.country_name}: Compare paid vs owed at {self.personal_income_tax.get_rate()} rate")
+                # NOTE: these should be the equal
+                a = (
+                    np.sum(self.individuals.ts.current("personal_income_tax_paid")) 
+                    + np.sum(self.individuals.ts.current("personal_income_tax_adjustment"))
+                )
+                b = np.sum(self.individuals.ts.current("personal_income_tax_owed"))
+                print(f"\t{self.country_name}:")
                 print(f"\t\ttotal_personal_income_tax_paid: ${a:,.2f}")
                 print(f"\t\ttotal_personal_income_tax_owed: ${b:,.2f}")
                 percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
-                print(f"\t\tpercent_difference: {percent_difference:.2f}% (NOTE: Difference reconciled at the end of the year)")
+                print(f"\t\tpercent_difference: {percent_difference:.2f}%")
 
-            # calculate annual taxes and reconcile difference with timestep taxes
-            if timestep.month == 10:
-                total_annual_personal_income_tax_owed = self.personal_income_tax.compute_annual_personal_income_tax_owed(
-                    timestep, 
-                    self.individuals, 
-                    self.households,
-                )
-            else:
-                # No tax reconciliation for the other timesteps
-                self.individuals.ts.personal_income_tax_adjustment.append(np.zeros(self.individuals.n_individuals))
+            # # calculate annual taxes and reconcile difference with timestep taxes
+            # if timestep.month == 10:
+            #     total_annual_personal_income_tax_owed = self.personal_income_tax.compute_annual_personal_income_tax_owed(
+            #         timestep, 
+            #         self.individuals, 
+            #         self.households,
+            #     )
+            # else:
+            #     # No tax reconciliation for the other timesteps
+            #     self.individuals.ts.personal_income_tax_adjustment.append(np.zeros(self.individuals.n_individuals))
+        else:
+            self.individuals.ts.personal_income_tax_adjustment.append(np.zeros(self.individuals.n_individuals))
 
         # Reorder so that taxes are downstream of overall income calculations
         # (individual expected income & household employment income)
@@ -1252,13 +1308,19 @@ class Country:
         # C2. WAGES AND LABOR
         self.firms.update_total_wages_paid(
             corresponding_firm=self.individuals.states["Corresponding Firm ID"],
-            individual_wages=self.individuals.ts.current("employee_income"),
+            individual_wages=(
+                self.individuals.ts.current("employee_income")
+                - self.individuals.ts.current("personal_income_tax_adjustment")
+            ),
             income_taxes=self.central_government.states["Income Tax"],
             employee_social_insurance_tax=self.central_government.states["Employee Social Insurance Tax"],
             employer_social_insurance_tax=self.central_government.states["Employer Social Insurance Tax"],
             cpi=self.economy.ts.current("cpi")[0],
             use_taxation_policies=self.use_taxation_policies,
-            individuals_personal_income_tax_owed=self.individuals.ts.current("personal_income_tax_owed"),
+            individuals_personal_income_tax_paid=(
+                self.individuals.ts.current("personal_income_tax_paid")
+                + self.individuals.ts.current("personal_income_tax_adjustment")
+            ),
         )
 
         # C3. EMISSIONS AND INVENTORY
@@ -1378,7 +1440,10 @@ class Country:
 
         self.households.ts.income_employee.append(
             self.households.compute_employee_income(
-                individual_income=self.individuals.ts.current("employee_income"),
+                individual_income=(
+                    self.individuals.ts.current("employee_income")
+                    - self.individuals.ts.current("personal_income_tax_adjustment")
+                ),
                 corr_households=self.individuals.states["Corresponding Household ID"],
             )
         )
@@ -1511,7 +1576,10 @@ class Country:
         # General government fields
         # print(f"\t{self.country_name}: Compare taxes_income")
         self.central_government.compute_taxes(
-            current_ind_employee_income=self.individuals.ts.current("employee_income"),
+            current_ind_employee_income=(
+                self.individuals.ts.current("employee_income")
+                - self.individuals.ts.current("personal_income_tax_adjustment")
+            ),
             current_total_rent_paid=self.households.ts.current("rent")[
                 self.households.states["Tenure Status of the Main Residence"] == 3
             ].sum(),
@@ -1527,7 +1595,10 @@ class Country:
             current_household_new_real_wealth=self.households.ts.current("investment"),
             current_total_exports=self.economy.ts.current("exports_before_taxes").sum(),
             use_taxation_policies=self.use_taxation_policies,
-            individuals_personal_income_tax_paid=self.individuals.ts.current("personal_income_tax_paid"),
+            individuals_personal_income_tax_paid=(
+                self.individuals.ts.current("personal_income_tax_paid")
+                + self.individuals.ts.current("personal_income_tax_adjustment")
+            ),
         )
 
         # General government fields
@@ -1612,7 +1683,10 @@ class Country:
         if self.personal_income_tax.bracket_timeseries is not None:
             bracket_timeseries_year = self.personal_income_tax.bracket_timeseries.loc[[year]] # pass index as list ensures dataframe (not a series) returned
         else:
-            raise ValueError("self.personal_income_tax.bracket_timeseries is empty.") 
+            raise ValueError(
+                "self.personal_income_tax.bracket_timeseries is empty ", 
+                "(self.personal_income_tax.simple_bracket is not None)."
+            ) 
         
         bracket_timeseries_year["upper"] = bracket_timeseries_year["upper"].map(
             lambda x: float('inf') if isinstance(x, str) and x.strip() == "float('inf')" else float(x)
@@ -1627,9 +1701,46 @@ class Country:
             print(f"Error converting values: {e}")
             bracket_list = [(float('inf'), 0.09)]       # model default fall-back
 
-        # print(f"{self.country_name}: previous bracket {self.personal_income_tax.get_rate()}")
-        self.personal_income_tax.set_rate(bracket_list)
-        # print(f"{self.country_name}: updated bracket  {self.personal_income_tax.get_rate()}")
+        # print(f"{self.country_name}: previous bracket {self.personal_income_tax.get_brackets()}")
+        self.personal_income_tax.set_brackets(bracket_list)
+        # print(f"{self.country_name}: updated bracket  {self.personal_income_tax.get_brackets()}")
+
+    def update_credits(self, year:int) -> None:
+        """Set personal income tax credits for a certain year.
+            
+        Args:
+            year (int): Year
+        """
+
+        credits_country = self.personal_income_tax.credit_timeseries
+        credits_country_year = credits_country.loc[[year]] # pass index as list ensures dataframe (not a series) returned 
+
+        # NOTE: storing as dict allows the credit types to change year to year 
+        #       (ie credit types can be introduced/removed part way through simulation)
+        # NOTE: PersonalIncomeTax.compute_individual_nonrefundable_credits() needs to be updated to process new credits
+        #       beyond "Age Amount", "Dependant Amount", "Personal Amount", and "Spousal Amount"
+
+        # clear existing self.personal_income_tax.credits in case the credit types have changed
+        self.personal_income_tax.credits = {}
+
+        # and then fill with updated elements
+        credit_list = credits_country_year['credit'].values     # store credit types
+
+        for credit in credit_list:
+            credit_data = credits_country_year.loc[credits_country_year['credit'] == credit]
+
+            self.personal_income_tax.credits[credit] = PersonalIncomeTaxCredit(
+                amount = credit_data.amount.values[0], 
+                top = credit_data.top.values[0], 
+                rate = credit_data.rate.values[0], 
+                clawback = credit_data.clawback.values[0], 
+                clawback_rate = credit_data.clawback_rate.values[0], 
+                indexed = credit_data.indexed.values[0],
+            )
+
+        # if self.country_name == 'CAN_BC':
+        credit = credit_list[2]
+        print(f"{year} {self.country_name} personal_income_tax.credits[{credit}].amount {self.personal_income_tax.credits[credit].amount}")
 
     def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
         """Convert Enum class values to int
