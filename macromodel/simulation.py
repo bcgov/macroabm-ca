@@ -303,6 +303,12 @@ class Simulation:
         # Execute pre-hooks before any iteration logic
         self.run_prehooks(self.timestep.year, self.timestep.month)
 
+        # Update taxation policies for new timestep
+        if self.timestep.month == 1:
+            for country in self.countries.values():
+                country.update_brackets(self.timestep.year)
+                country.update_credits(self.timestep.year)
+
         # self.exchange_rates.set_current_exchange_rates(current_year=self.timestep.year)
 
         for ind, country in enumerate(self.countries.values()):
@@ -370,12 +376,6 @@ class Simulation:
 
         # Next month
         self.timestep.step()
-
-        # Update taxation policies for new timestep
-        if self.timestep.month == 1:
-            for country in self.countries.values():
-                country.update_brackets(self.timestep.year)
-                country.update_credits(self.timestep.year)
 
     @property
     def aggregate_nominal_production(self) -> float:

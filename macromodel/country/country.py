@@ -489,8 +489,8 @@ class Country:
                         clawback_rate = credit_data.clawback_rate.values[0], 
                         indexed = credit_data.indexed.values[0],
                     )
-
-                    # print(f"personal_income_tax.credits[{credit}].amount {personal_income_tax.credits[credit].amount}")
+                # credit = credit_list[2]
+                # print(f"{initial_year} {country_name} personal_income_tax.credits[{credit}].amount {personal_income_tax.credits[credit].amount}")
         else:
             personal_income_tax = None
 
@@ -859,19 +859,12 @@ class Country:
                         annual_taxable_income[i] += self.individuals.ts.taxable_income[t - s][i]  
 
             # Calculate taxes owed and reconcile
-            self.personal_income_tax.new_compute_personal_income_tax_owed(
+            self.personal_income_tax.compute_personal_income_tax_owed(
                 annual_taxable_income=annual_taxable_income,
                 annual_personal_income_tax_paid=annual_personal_income_tax_paid,
                 individuals=self.individuals,
                 households=self.households,
             ) 
-
-            # # calculate per timestep taxes due
-            # # NOTE: Must be executed after ALL income streams are assigned
-            # total_personal_income_tax_owed = self.personal_income_tax.compute_personal_income_tax_owed(
-            #     self.individuals, 
-            #     self.households,
-            # )
 
             debug = False
             if debug:
@@ -886,17 +879,6 @@ class Country:
                 print(f"\t\ttotal_personal_income_tax_owed: ${b:,.2f}")
                 percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
                 print(f"\t\tpercent_difference: {percent_difference:.2f}%")
-
-            # # calculate annual taxes and reconcile difference with timestep taxes
-            # if timestep.month == 10:
-            #     total_annual_personal_income_tax_owed = self.personal_income_tax.compute_annual_personal_income_tax_owed(
-            #         timestep, 
-            #         self.individuals, 
-            #         self.households,
-            #     )
-            # else:
-            #     # No tax reconciliation for the other timesteps
-            #     self.individuals.ts.personal_income_tax_adjustment.append(np.zeros(self.individuals.n_individuals))
         else:
             self.individuals.ts.personal_income_tax_adjustment.append(np.zeros(self.individuals.n_individuals))
 
@@ -1738,9 +1720,8 @@ class Country:
                 indexed = credit_data.indexed.values[0],
             )
 
-        # if self.country_name == 'CAN_BC':
-        credit = credit_list[2]
-        print(f"{year} {self.country_name} personal_income_tax.credits[{credit}].amount {self.personal_income_tax.credits[credit].amount}")
+        # credit = credit_list[2]
+        # print(f"{year} {self.country_name} personal_income_tax.credits[{credit}].amount {self.personal_income_tax.credits[credit].amount}")
 
     def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
         """Convert Enum class values to int

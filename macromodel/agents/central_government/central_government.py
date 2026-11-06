@@ -335,7 +335,7 @@ class CentralGovernment(Agent):
         if use_taxation_policies:
             taxes_income_final = [
                 np.sum(individuals_personal_income_tax_paid)                
-                # NOTE: Includes employment, unemployment (TODO: add rental income and investment)
+                # NOTE: Includes employment, unemployment, and rental income (TODO: add investment)
             ]
         else:
             taxes_income_final = [
@@ -357,7 +357,7 @@ class CentralGovernment(Agent):
             print(f"\t\tpercent_difference: {percent_difference:.2f}%") 
             
         self.ts.taxes_income.append(taxes_income_final)
-        self.ts.taxes_rental_income.append([self.states["Income Tax"] * current_total_rent_paid])
+        self.ts.taxes_rental_income.append([self.states["Income Tax"] * current_total_rent_paid])       # TODO: update to use brackets
 
         # Taxes on employer social insurance
         self.ts.taxes_employer_si.append([self.states["Employer Social Insurance Tax"] * tot_wages_employed_ind])
