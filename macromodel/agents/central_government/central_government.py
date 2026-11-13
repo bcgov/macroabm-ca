@@ -327,8 +327,7 @@ class CentralGovernment(Agent):
         self.ts.taxes_exports.append([self.states["Export Tax"] * current_total_exports])
 
         # Total wages of employed individuals
-        # NOTE: includes employee_income ONLY from employed 
-        # (potentially misses unemployment income stream and rental income when unemployed)
+        # NOTE: tot_wages_employed_ind does NOT include unemployment and rental income
         tot_wages_employed_ind = np.sum([current_ind_employee_income[current_ind_activity == ActivityStatus.EMPLOYED]])
 
         # Taxes on income

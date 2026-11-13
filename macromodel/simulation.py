@@ -307,7 +307,7 @@ class Simulation:
         if self.timestep.month == 1:
             for country in self.countries.values():
                 country.update_brackets(self.timestep.year)
-                country.update_credits(self.timestep.year)
+                country.update_nonrefundable_credits(self.timestep.year)
 
         # self.exchange_rates.set_current_exchange_rates(current_year=self.timestep.year)
 

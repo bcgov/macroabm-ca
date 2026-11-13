@@ -175,6 +175,9 @@ class Individuals(Agent):
         states["Offered Wage of Accepted Job"] = np.zeros(len(states["Activity Status"]))
         states["Dividend Payout Ratio"] = 0.0
 
+        # Taxation
+        states["Credit Cost"] = np.full(len(states["Activity Status"]), {})
+
         def fillnan(x: np.ndarray) -> np.ndarray:
             return np.where(np.isnan(x), -1, x)
 

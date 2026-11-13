@@ -466,11 +466,11 @@ class Country:
             if personal_income_tax is not None:
                 # TODO: .\raw_data\taxation\personal_income_taxpersonal_income_tax-non_refundable_tax_credits.csv 
                 #       needs to be reviewed for accuracy (LS did not compile or verify) - especially "Dependant Amount" values
-                credits_all = synthetic_country.personal_income_tax_credits.credits
+                credits_all = synthetic_country.personal_income_tax_nonrefundable_credits.nonrefundable_credits
                 credits_country = credits_all[(credits_all['jurisdiction'] == country_name)]
                 credits_country_year = credits_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
 
-                personal_income_tax.credit_timeseries = credits_country # store complete timeseries for this country
+                personal_income_tax.nonrefundable_credit_timeseries = credits_country # store complete timeseries for this country
 
                 # NOTE: storing as dict allows the credit types to change year to year 
                 #       (ie credit types can be introduced/removed part way through simulation)
@@ -481,7 +481,7 @@ class Country:
                 for credit in credit_list:
                     credit_data = credits_country_year.loc[credits_country_year['credit'] == credit]
 
-                    personal_income_tax.credits[credit] = PersonalIncomeTaxCredit(
+                    personal_income_tax.nonrefundable_credits[credit] = PersonalIncomeTaxCredit(
                         amount = credit_data.amount.values[0], 
                         top = credit_data.top.values[0], 
                         rate = credit_data.rate.values[0], 
@@ -490,7 +490,7 @@ class Country:
                         indexed = credit_data.indexed.values[0],
                     )
                 # credit = credit_list[2]
-                # print(f"{initial_year} {country_name} personal_income_tax.credits[{credit}].amount {personal_income_tax.credits[credit].amount}")
+                # print(f"{initial_year} {country_name} personal_income_tax.nonrefundable_credits[{credit}].amount {personal_income_tax.nonrefundable_credits[credit].amount}")
         else:
             personal_income_tax = None
 
@@ -833,7 +833,7 @@ class Country:
             self.individuals.ts.personal_income_tax_paid.append(personal_income_tax_paid)
 
             # Calculate taxable incomes
-            self.personal_income_tax.new_compute_taxable_income(
+            self.personal_income_tax.compute_taxable_income(
                 individuals=self.individuals,
                 households=self.households,
             )
@@ -858,13 +858,23 @@ class Country:
                         # calculate actual annual earnings
                         annual_taxable_income[i] += self.individuals.ts.taxable_income[t - s][i]  
 
+            # temporary TODO: fix for dynamic number of credits
+            self.individuals.ts.personal_income_tax_credit_cost_personal.append(np.zeros(self.individuals.n_individuals))
+            self.individuals.ts.personal_income_tax_credit_cost_age.append(np.zeros(self.individuals.n_individuals))
+            self.individuals.ts.personal_income_tax_credit_cost_spouse.append(np.zeros(self.individuals.n_individuals))
+            self.individuals.ts.personal_income_tax_credit_cost_dependant.append(np.zeros(self.individuals.n_individuals))
+            self.individuals.ts.personal_income_tax_credit_cost_reduction.append(np.zeros(self.individuals.n_individuals))
+
             # Calculate taxes owed and reconcile
             self.personal_income_tax.compute_personal_income_tax_owed(
                 annual_taxable_income=annual_taxable_income,
                 annual_personal_income_tax_paid=annual_personal_income_tax_paid,
                 individuals=self.individuals,
                 households=self.households,
-            ) 
+            )
+
+            # if self.country_name == 'CAN_BC' and timestep.year == 2015:
+            #     print("got here")
 
             debug = False
             if debug:
@@ -1687,14 +1697,14 @@ class Country:
         self.personal_income_tax.set_brackets(bracket_list)
         # print(f"{self.country_name}: updated bracket  {self.personal_income_tax.get_brackets()}")
 
-    def update_credits(self, year:int) -> None:
-        """Set personal income tax credits for a certain year.
+    def update_nonrefundable_credits(self, year:int) -> None:
+        """Set personal income tax nonrefundable credits for a certain year.
             
         Args:
             year (int): Year
         """
 
-        credits_country = self.personal_income_tax.credit_timeseries
+        credits_country = self.personal_income_tax.nonrefundable_credit_timeseries
         credits_country_year = credits_country.loc[[year]] # pass index as list ensures dataframe (not a series) returned 
 
         # NOTE: storing as dict allows the credit types to change year to year 
@@ -1702,8 +1712,8 @@ class Country:
         # NOTE: PersonalIncomeTax.compute_individual_nonrefundable_credits() needs to be updated to process new credits
         #       beyond "Age Amount", "Dependant Amount", "Personal Amount", and "Spousal Amount"
 
-        # clear existing self.personal_income_tax.credits in case the credit types have changed
-        self.personal_income_tax.credits = {}
+        # clear existing self.personal_income_tax.nonrefundable_credits in case the credit types have changed
+        self.personal_income_tax.nonrefundable_credits = {}
 
         # and then fill with updated elements
         credit_list = credits_country_year['credit'].values     # store credit types
@@ -1711,7 +1721,7 @@ class Country:
         for credit in credit_list:
             credit_data = credits_country_year.loc[credits_country_year['credit'] == credit]
 
-            self.personal_income_tax.credits[credit] = PersonalIncomeTaxCredit(
+            self.personal_income_tax.nonrefundable_credits[credit] = PersonalIncomeTaxCredit(
                 amount = credit_data.amount.values[0], 
                 top = credit_data.top.values[0], 
                 rate = credit_data.rate.values[0], 
@@ -1721,7 +1731,7 @@ class Country:
             )
 
         # credit = credit_list[2]
-        # print(f"{year} {self.country_name} personal_income_tax.credits[{credit}].amount {self.personal_income_tax.credits[credit].amount}")
+        # print(f"{year} {self.country_name} personal_income_tax.nonrefundable_credits[{credit}].amount {self.personal_income_tax.nonrefundable_credits[credit].amount}")
 
     def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
         """Convert Enum class values to int

@@ -91,6 +91,13 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         # personal_income_tax_paid_rent=np.zeros(len(data)),        # TODO: implement once other income streams are working
         # personal_income_tax_paid_investment=np.zeros(len(data)),  # TODO: implement once other income streams are working
         personal_income_tax_adjustment=np.zeros(len(data)),
+
+        # temporary
+        personal_income_tax_credit_cost_personal=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
+        personal_income_tax_credit_cost_age=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
+        personal_income_tax_credit_cost_spouse=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
+        personal_income_tax_credit_cost_dependant=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
+        personal_income_tax_credit_cost_reduction=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
     )
 
 def create_individuals_states_timeseries(

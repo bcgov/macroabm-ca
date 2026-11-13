@@ -114,7 +114,7 @@ from macro_data.readers.exo_prices.exo_prices_reader import SectorExoPrices
 from macro_data.readers.exogenous_data import ExogenousCountryData
 from macro_data.readers.taxation.personal_income_tax.personal_income_tax_reader import (
     PersonalIncomeTaxBracketsData,
-    PersonalIncomeTaxCreditsData,
+    PersonalIncomeTaxNonrefundableCreditsData,
 )
 
 
@@ -180,7 +180,7 @@ class SyntheticCountry:
     emission_factors_ch4: Optional[CH4EmissionsDataCAN] = None
     historical_emissions_df: Optional[pd.DataFrame] = None
     personal_income_tax_brackets: Optional[PersonalIncomeTaxBracketsData] = None
-    personal_income_tax_credits: Optional[PersonalIncomeTaxCreditsData] = None 
+    personal_income_tax_nonrefundable_credits: Optional[PersonalIncomeTaxNonrefundableCreditsData] = None 
 
     @classmethod
     def eu_synthetic_country(
@@ -361,10 +361,12 @@ class SyntheticCountry:
         else:
             personal_income_tax_brackets = None
 
-        if readers.personal_income_tax_credits is not None:
-            personal_income_tax_credits = PersonalIncomeTaxCreditsData.from_reader(readers.personal_income_tax_credits)
+        if readers.personal_income_tax_nonrefundable_credits is not None:
+            personal_income_tax_nonrefundable_credits = PersonalIncomeTaxNonrefundableCreditsData.from_reader(
+                readers.personal_income_tax_nonrefundable_credits
+                )
         else:
-            personal_income_tax_credits = None
+            personal_income_tax_nonrefundable_credits = None
 
         return cls(
             population=population,
@@ -395,7 +397,7 @@ class SyntheticCountry:
                 SectorExoPrices.from_reader(readers.exo_prices) if readers.exo_prices is not None else None
             ),
             personal_income_tax_brackets=personal_income_tax_brackets,
-            personal_income_tax_credits=personal_income_tax_credits,
+            personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
         )
 
     @classmethod
@@ -589,10 +591,12 @@ class SyntheticCountry:
         else:
             personal_income_tax_brackets = None
 
-        if readers.personal_income_tax_credits is not None:
-            personal_income_tax_credits = PersonalIncomeTaxCreditsData.from_reader(readers.personal_income_tax_credits)
+        if readers.personal_income_tax_nonrefundable_credits is not None:
+            personal_income_tax_nonrefundable_credits = PersonalIncomeTaxNonrefundableCreditsData.from_reader(
+                readers.personal_income_tax_nonrefundable_credits
+                )
         else:
-            personal_income_tax_credits = None
+            personal_income_tax_nonrefundable_credits = None
 
         return cls(
             population=population,
@@ -623,7 +627,7 @@ class SyntheticCountry:
                 SectorExoPrices.from_reader(readers.exo_prices) if readers.exo_prices is not None else None
             ),
             personal_income_tax_brackets=personal_income_tax_brackets,
-            personal_income_tax_credits=personal_income_tax_credits,
+            personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
         )
 
     @classmethod

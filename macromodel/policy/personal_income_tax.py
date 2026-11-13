@@ -47,8 +47,8 @@ class PersonalIncomeTax(ABC):
             scale (int): Scaling factor for population-based calculations
             increments_per_year (int): Timesteps per year
             bracket_timeseries (pd.DataFrame): Bracket timeseries for use by country.update_brackets()
-            credits_timeseries (pd.DataFrame): Credit timeseries for use by country.update_credits()
-            credits (dict(PersonalIncomeTaxCredit)): Credit variables
+            nonrefundable_credit_timeseries (pd.DataFrame): Nonrefundable credit timeseries for use by country.update_credits()
+            nonrefundable_credits (dict(PersonalIncomeTaxCredit)): Nonrefundable credit variables
 
         """
         self.brackets = brackets
@@ -56,8 +56,8 @@ class PersonalIncomeTax(ABC):
         self.increments_per_year = increments_per_year
         
         self.bracket_timeseries:pd.DataFrame = None
-        self.credit_timeseries:pd.DataFrame = None
-        self.credits = {}
+        self.nonrefundable_credit_timeseries:pd.DataFrame = None
+        self.nonrefundable_credits = {}
 
     @abstractmethod
     def compute_individual_tax(self, taxable_income: float) -> float:
@@ -103,7 +103,7 @@ class PersonalIncomeTax(ABC):
 
         return individuals_personal_income_tax_owed 
     
-    def new_compute_taxable_income(
+    def compute_taxable_income(
             self, 
             individuals: Individuals, 
             households: Households, 
@@ -205,6 +205,8 @@ class PersonalIncomeTax(ABC):
         # blanks for calculation
         annual_tax_on_taxable_income = np.zeros_like(individuals.ts.current("employee_income"))
         annual_nonrefundable_credits = np.zeros_like(individuals.ts.current("employee_income"))
+        annual_refundable_credits = np.zeros_like(individuals.ts.current("employee_income"))
+        annual_tax_owed_after_nonrefundable = np.zeros_like(individuals.ts.current("employee_income"))
         annual_tax_owed = np.zeros_like(individuals.ts.current("employee_income"))
         annual_tax_adjustment = np.zeros_like(individuals.ts.current("employee_income"))         
 
@@ -215,24 +217,40 @@ class PersonalIncomeTax(ABC):
             
             # calculate non-refundable credits received 
             # NOTE: MUST be done after annual_taxable_income is populated
-            # NOTE: individuals_taxable_income must be !UNSCALED! to align with values in self.brackets
+            # NOTE: individuals_taxable_income must be !UNSCALED! to align with values in self.nonrefundable_credits
             annual_nonrefundable_credits[i] = self.compute_individual_nonrefundable_credits(
                             index=i,
+                            annual_tax_on_taxable_income_unscaled = annual_tax_on_taxable_income[i] / self.scale,
+                            annual_taxable_income_unscaled = annual_taxable_income / self.scale,    # pass whole array
+                            individuals=individuals,
+                            households=households,
+                            ) * self.scale
+
+            tax_minus_nonrefundable_credits = (
+                annual_tax_on_taxable_income[i] 
+                - annual_nonrefundable_credits[i]
+            )
+            # non-refundable credits check
+            if  tax_minus_nonrefundable_credits < 0:
+                annual_tax_owed_after_nonrefundable[i] = 0
+            else:
+                annual_tax_owed_after_nonrefundable[i] = tax_minus_nonrefundable_credits
+            
+            # calculate refundable credits received
+            # NOTE: individuals_taxable_income must be !UNSCALED! to align with values in self.refundable_credits
+            annual_refundable_credits[i] = self.compute_individual_refundable_credits(
+                            index=i,
+                            annual_tax_on_taxable_income_unscaled = annual_tax_on_taxable_income[i] / self.scale,
                             annual_taxable_income_unscaled = annual_taxable_income / self.scale,    # pass whole array
                             individuals=individuals,
                             households=households,
                             ) * self.scale
             
-            # projected_annual_tax_reduction = self.compute_individual_tax_reduction()  # TODO: implement
-            tax_minus_credits = (
-                annual_tax_on_taxable_income[i] 
-                - annual_nonrefundable_credits[i]
-                # - projected_annual_tax_reduction                                      # TODO: implement
-            )
-            if  tax_minus_credits < 0:
-                annual_tax_owed[i] = 0
-            else:
-                annual_tax_owed[i] = tax_minus_credits
+            # now apply refundable credits
+            annual_tax_owed[i] = (
+                            annual_tax_owed_after_nonrefundable[i] 
+                            - annual_refundable_credits[i]
+                        )
                         
             # calculat the difference between amount paid vs owed
             annual_tax_adjustment[i] = annual_tax_owed[i] - annual_personal_income_tax_paid[i]
@@ -244,6 +262,7 @@ class PersonalIncomeTax(ABC):
     def compute_individual_nonrefundable_credits(
             self,
             index: int,
+            annual_tax_on_taxable_income_unscaled: float,
             annual_taxable_income_unscaled: np.ndarray,
             individuals: Individuals, 
             households: Households, 
@@ -253,6 +272,7 @@ class PersonalIncomeTax(ABC):
         
         Attributes:
             index (int): individual index
+            annual_tax_on_taxable_income_unscaled (float): Individual tax on taxable income (unscaled)
             annual_taxable_income_unscaled (np.ndarray): Annual individual taxable incomes (unscaled)
             individuals (Individuals): agent    TODO replace with np.array for each attribute used
             households (Households): agent      TODO replace with np.array for each attribute used
@@ -266,7 +286,7 @@ class PersonalIncomeTax(ABC):
 
         if debug:
             print(
-                f"index {index} ", 
+                f"\nindex {index} ", 
                 f"taxable_income {annual_taxable_income_unscaled[index]}"
             )
 
@@ -276,25 +296,41 @@ class PersonalIncomeTax(ABC):
             print(f"hh age {individuals.states["Age"][hh_list]}")
             print(f"hh income {annual_taxable_income_unscaled[hh_list]}")
 
+        # setup cost tracking for each credit
+        tax_burden_remaining = annual_tax_on_taxable_income_unscaled
+        # zero the costs for current credits
+        credit_list = self.nonrefundable_credits
+        for credit in credit_list:
+            individuals.states["Credit Cost"][index][credit] = 0
+
         # NOTE: see Form BC428
         rate = 0
 
         # Basic personal amount
-        if "Personal Amount" in self.credits:
-            basic_personal_amount = self.credits["Personal Amount"].amount  # line 16
-            rate = self.credits["Personal Amount"].rate                     # line 55
+        if "Personal Amount" in self.nonrefundable_credits:
+            basic_personal_amount = self.nonrefundable_credits["Personal Amount"].amount  # line 16
+            rate = self.nonrefundable_credits["Personal Amount"].rate                     # line 55
             if rate == 0:
                 raise ValueError("non-refundable tax credit rate cannot be zero")
+
+            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
+                tax_burden_remaining = tax_burden_remaining,
+                amount = basic_personal_amount,
+                rate = rate,
+                )
+            individuals.states["Credit Cost"][index]["Personal Amount"], tax_burden_remaining = credit_cost_tuple
         else:
             basic_personal_amount = 0
+            individuals.states["Credit Cost"][index]["Personal Amount"] = 0
+
         if debug: print(f"basic_personal_amount {basic_personal_amount}")
 
         # Age (65 or older by end of tax year) # NOTE: See Worksheet BC428
-        if "Age Amount" in self.credits:
-            amount = self.credits["Age Amount"].amount                      # line 1
-            top = self.credits["Age Amount"].top                            # line 58080 description
-            clawback = self.credits["Age Amount"].clawback                  # line 3
-            clawback_rate = self.credits["Age Amount"].clawback_rate        # line 5
+        if "Age Amount" in self.nonrefundable_credits:
+            amount = self.nonrefundable_credits["Age Amount"].amount                      # line 1
+            top = self.nonrefundable_credits["Age Amount"].top                            # line 58080 description
+            clawback = self.nonrefundable_credits["Age Amount"].clawback                  # line 3
+            clawback_rate = self.nonrefundable_credits["Age Amount"].clawback_rate        # line 5
             
             if individuals.states["Age"][index] >= 65:
                 if annual_taxable_income_unscaled[index] <= clawback:
@@ -309,53 +345,66 @@ class PersonalIncomeTax(ABC):
                     )
             else:
                 age_amount =  0
+
+            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
+                tax_burden_remaining = tax_burden_remaining,
+                amount = age_amount,
+                rate = rate,
+                )
+            individuals.states["Credit Cost"][index]["Age Amount"], tax_burden_remaining = credit_cost_tuple
         else:
             age_amount =  0
+            individuals.states["Credit Cost"][index]["Age Amount"] = 0
+
         if debug: print(f"age_amount {age_amount}")
 
         # Spouse or common-law partner  # NOTE: see Form BC428
-        if "Spouse Amount" in self.credits:
-            amount = self.credits["Spouse Amount"].amount                   # line 20
-            top = self.credits["Spouse Amount"].top                         # line 18
+        if "Spousal Amount" in self.nonrefundable_credits:
+            amount = self.nonrefundable_credits["Spousal Amount"].amount                   # line 20
+            top = self.nonrefundable_credits["Spousal Amount"].top                         # line 18
             
-            if (
-                individuals.states["Corresponding Household ID"][index] != 0
-                and individuals.states["Age"][index] >= 18
-                ):       # check if adult and belongs to a hh
+            if individuals.states["Age"][index] >= 18:       # check if adult
                 hh_id = individuals.states["Corresponding Household ID"][index]    # identify which hh it belongs to
+                spousal_taxable_income = 0
 
                 if households.states["Number of Adults"][hh_id] == 2:    # NOTE: assume all households with 2 adults are eligible
                     found_spouse = False
                     hh_list = households.states["corr_individuals"][hh_id]
                     for j in hh_list:
                         if j != index and individuals.states["Age"][j] >= 18:
-                            spouse_taxable_income = annual_taxable_income_unscaled[j]
+                            spousal_taxable_income = annual_taxable_income_unscaled[j]
                             found_spouse = True
                     if found_spouse == False:
                         raise ValueError("Failed to find 2nd adult for households.states['Number of Adults'][hh_id] == 2")
                     
-                    spouse_amount = top - spouse_taxable_income
-                    if spouse_amount < 0:
-                        spouse_amount = 0
-                    elif spouse_amount > amount:
-                        spouse_amount = amount
+                    spousal_amount = top - spousal_taxable_income
+                    if spousal_amount < 0:
+                        spousal_amount = 0
+                    elif spousal_amount > amount:
+                        spousal_amount = amount
                 else:
-                    spouse_amount = 0 
+                    spousal_amount = 0 
             else:
-                spouse_amount = 0
+                spousal_amount = 0
+
+            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
+                tax_burden_remaining = tax_burden_remaining,
+                amount = spousal_amount,
+                rate = rate,
+                )
+            individuals.states["Credit Cost"][index]["Spousal Amount"], tax_burden_remaining = credit_cost_tuple
         else:
-            spouse_amount = 0
-        if debug: print(f"spouse_amount {spouse_amount}")
+            spousal_amount = 0
+            individuals.states["Credit Cost"][index]["Spousal Amount"] = 0
+
+        if debug: print(f"spousal_amount {spousal_amount}")
 
         # Eligible dependant    # NOTE: see Form BC428
-        if "Dependant Amount" in self.credits:
-            amount = self.credits["Dependant Amount"].amount                # line 23
-            top = self.credits["Dependant Amount"].top                      # line 21
+        if "Dependant Amount" in self.nonrefundable_credits:
+            amount = self.nonrefundable_credits["Dependant Amount"].amount                # line 23
+            top = self.nonrefundable_credits["Dependant Amount"].top                      # line 21
 
-            if (
-                individuals.states["Corresponding Household ID"][index] != 0
-                and individuals.states["Age"][index] >= 18
-            ):       # check if adult and belongs to a hh
+            if individuals.states["Age"][index] >= 18:       # check if adult
                 hh_id = individuals.states["Corresponding Household ID"][index]    # identify which hh it belongs to
 
                 if (households.states["Type"][hh_id] == HouseholdType.SINGLE_PARENT_WITH_CHILDREN):
@@ -364,16 +413,23 @@ class PersonalIncomeTax(ABC):
                     dependant_amount = 0
             else:
                 dependant_amount = 0
+
+            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
+                tax_burden_remaining = tax_burden_remaining,
+                amount = dependant_amount,
+                rate = rate,
+                )
+            individuals.states["Credit Cost"][index]["Dependant Amount"], tax_burden_remaining = credit_cost_tuple
         else:
             dependant_amount = 0
+            individuals.states["Credit Cost"][index]["Dependant Amount"] = 0
 
         if debug: print(f"dependant_amount {dependant_amount}")
 
-        tax_reduction = 0   # for jurisdictions outside of BC
-        if "Tax Reduction" in self.credits:
-            amount = self.credits["Tax Reduction"].amount                # line 73
-            top = self.credits["Tax Reduction"].top                      # line 75
-            clawback_rate = self.credits["Tax Reduction"].clawback_rate  # line 77
+        if "Tax Reduction" in self.nonrefundable_credits:
+            amount = self.nonrefundable_credits["Tax Reduction"].amount                # line 73
+            top = self.nonrefundable_credits["Tax Reduction"].top                      # line 75
+            clawback_rate = self.nonrefundable_credits["Tax Reduction"].clawback_rate  # line 77
 
             if annual_taxable_income_unscaled[index] > top:
                 tax_reduction = 0
@@ -383,12 +439,184 @@ class PersonalIncomeTax(ABC):
                     clawback = 0
                 tax_reduction = amount - clawback
 
-        total_individual_credits = (basic_personal_amount + age_amount + spouse_amount + dependant_amount) * rate # line 56
+            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
+                tax_burden_remaining = tax_burden_remaining,
+                amount = tax_reduction,
+                rate = 1,
+                )
+            individuals.states["Credit Cost"][index]["Tax Reduction"], tax_burden_remaining = credit_cost_tuple
+        else:
+            tax_reduction = 0   # for jurisdictions outside of BC
+            individuals.states["Credit Cost"][index]["Tax Reduction"] = 0
+
+        if debug: print(f"tax_reduction {tax_reduction}")
+
+        total_individual_credits = (basic_personal_amount + age_amount + spousal_amount + dependant_amount) * rate # line 56
         total_individual_credits += tax_reduction                       # line 80
 
-        if debug: print(f"total_credits {total_individual_credits}")       
+        if debug: print(f"total_credits {total_individual_credits}")
 
-        return total_individual_credits 
+        # store credit costs    # temporary TODO: fix for dynamic number of credits
+        individuals.ts.current("personal_income_tax_credit_cost_personal")[index] = (
+            individuals.states["Credit Cost"][index]["Personal Amount"]
+        )
+        individuals.ts.current("personal_income_tax_credit_cost_age")[index] = (
+                    individuals.states["Credit Cost"][index]["Age Amount"]
+                )
+        individuals.ts.current("personal_income_tax_credit_cost_spouse")[index] = (
+            individuals.states["Credit Cost"][index]["Spousal Amount"]
+        )
+        individuals.ts.current("personal_income_tax_credit_cost_dependant")[index] = (
+            individuals.states["Credit Cost"][index]["Dependant Amount"]
+        )
+        individuals.ts.current("personal_income_tax_credit_cost_reduction")[index] = (
+            individuals.states["Credit Cost"][index]["Tax Reduction"]
+        )
+
+        return total_individual_credits
+
+    def compute_nonrefundable_credit_cost(
+            self,
+            tax_burden_remaining: float,
+            amount: float,
+            rate: float,
+            ) -> tuple[float, float]:
+        """Calculate cost of supplying individual with a nonrefundable tax credit
+        
+        Attributes:
+            tax_burden_remaining (float):
+            amount (float):
+            rate (float):
+
+        Returns:
+            float: Cost of supplying individual with tax credit
+            tuple[float, float]: 
+                Cost of supplying individual with tax credit, 
+                tax_burden_remaining
+        """
+
+        if tax_burden_remaining <= 0:                   # no tax burden to offset with further refunds
+            tax_burden_remaining = 0
+            credit_cost = 0
+        else:                                           # tax burden available to offset with refunds
+            if tax_burden_remaining >= amount * rate:   # whole credit can be applied
+                tax_burden_remaining -= amount * rate
+                credit_cost = amount * rate
+            else:                                       # partial credit can be applied
+                tax_burden_remaining = 0
+                credit_cost = tax_burden_remaining
+
+        return credit_cost, tax_burden_remaining
+
+    def compute_individual_refundable_credits(
+            self,
+            index: int,
+            annual_tax_on_taxable_income_unscaled: float,
+            annual_taxable_income_unscaled: np.ndarray,
+            individuals: Individuals, 
+            households: Households, 
+            ) -> float:
+        """Calculate personal income tax refundable credits owed to an indiviudal agent for a single timestep
+            NOTE: Assumes that credits are applied consistently with Form BC479 2025 across time and jurisdiction
+        
+        Attributes:
+            index (int): individual index
+            annual_tax_on_taxable_income_unscaled (float): Individual tax on taxable income (unscaled)
+            annual_taxable_income_unscaled (np.ndarray): Annual individual taxable incomes (unscaled)
+            individuals (Individuals): agent    TODO replace with np.array for each attribute used
+            households (Households): agent      TODO replace with np.array for each attribute used
+
+        Returns:
+            float: Personal income tax refundable credits owed to an individual agent
+        """
+        from macromodel.agents.households.household_properties import HouseholdType
+
+        debug = False
+
+        if debug:
+            hh_id = individuals.states["Corresponding Household ID"][index]
+            hh_list = households.states["corr_individuals"][hh_id]
+
+            if households.states["Tenure Status of the Main Residence"][hh_id] == 3:
+                print(
+                    f"\nindex {index} ",
+                    f"hh_id {hh_id} ",
+                    f"Tenure Status {households.states["Tenure Status of the Main Residence"][hh_id]} ",  
+                    f"taxable_income {annual_taxable_income_unscaled[index]}"
+                )
+                print(f"hh list {hh_list}")
+                print(f"hh age {individuals.states["Age"][hh_list]}")
+                print(f"hh income {annual_taxable_income_unscaled[hh_list]}")
+
+        # TODO: implement data readers etc before uncommenting
+        # if "Renter Amount" in self.refundable_credits:
+        #     amount = self.refundable_credits["Renter Amount"].amount                   # line ??? TODO: update
+        #     top = self.refundable_credits["Renter Amount"].top                         # line ??? TODO: update
+        
+        amount = 400                                                # line 38
+        top = 84764                                                 # credit description
+        clawback = 64764                                            # line 40
+        clawback_rate = 0.02                                        # line 42
+
+        if (individuals.states["Age"][index] >= 18):       # check if adult
+            hh_id = individuals.states["Corresponding Household ID"][index]    # identify which hh it belongs to
+            hh_list = households.states["corr_individuals"][hh_id]
+
+            # NOTE: this doesn't include rental or investment income
+            hh_net_income_unscaled = np.sum(annual_taxable_income_unscaled[hh_list])
+
+            # filter for renters (see housing_info_from_population() in matching_households_with_houses.py 
+            # for "Tenure Status of the Main Residence" meaning)
+            if (
+                households.states["Tenure Status of the Main Residence"][hh_id] == 3
+                and hh_net_income_unscaled < top
+            ):
+            
+                # determine which adult in hh claims credit (only one allowed)
+                if households.states["Number of Adults"][hh_id] > 1:
+                    hh_annual_taxable_income_unscaled = annual_taxable_income_unscaled[hh_list]
+
+                    # Sort pairs by individual incomes within hh
+                    paired = list(zip(hh_list, hh_annual_taxable_income_unscaled))
+                    paired.sort(key=lambda x: x[1])
+                    hh_list_sorted, hh_annual_taxable_income_unscaled_sorted = zip(*paired)
+                    hh_list_sorted = list(hh_list_sorted)
+                    hh_annual_taxable_income_unscaled_sorted = list(hh_annual_taxable_income_unscaled_sorted)
+
+                    # assign credit to adult individual with highest income
+                    if index == hh_list_sorted[-1]:
+                        if debug:
+                            print(f"hh_list_sorted {hh_list_sorted}")
+                            print(f"hh_annual_taxable_income_unscaled_sorted {hh_annual_taxable_income_unscaled_sorted}")
+                        assigned_credit = True
+                    else:
+                        assigned_credit = False
+                else:
+                    assigned_credit = True
+
+                if assigned_credit:
+                    if hh_net_income_unscaled <= clawback:
+                        renter_amount =  amount
+                    else:
+                        renter_amount = (
+                            amount - 
+                            (hh_net_income_unscaled - clawback) 
+                            * clawback_rate
+                        )
+                else:
+                    renter_amount = 0
+            else:
+                renter_amount = 0
+        else:
+            renter_amount = 0
+
+        if debug:
+            print(f"renter_amount {renter_amount}")
+
+        refundable_credit_amount = renter_amount
+
+        return refundable_credit_amount
+    
 
 class FlatRate(PersonalIncomeTax):
     """Flat rate income tax policy."""
@@ -402,8 +630,8 @@ class FlatRate(PersonalIncomeTax):
             scale (int): Scaling factor for population-based calculations
             increments_per_year (int): Timesteps per year
             bracket_timeseries (pd.DataFrame): Bracket timeseries for use by country.update_brackets()
-            credits_timeseries (pd.DataFrame): Credit timeseries for use by country.update_credits()
-            credits (dict(PersonalIncomeTaxCredit)): Credit variables
+            nonrefundable_credit_timeseries (pd.DataFrame): Nonrefundable credit timeseries for use by country.update_credits()
+            nonrefundable_credits (dict(PersonalIncomeTaxCredit)): Nonrefundable credit variables
 
         """
         self._validate_brackets(brackets)
@@ -412,8 +640,8 @@ class FlatRate(PersonalIncomeTax):
         self.increments_per_year = increments_per_year
 
         self.bracket_timeseries:pd.DataFrame = None
-        self.credit_timeseries:pd.DataFrame = None
-        self.credits = {}
+        self.nonrefundable_credit_timeseries:pd.DataFrame = None
+        self.nonrefundable_credits = {}
 
     def _validate_brackets(self, brackets: list[tuple[float, float]]) -> None:
         """Ensure brackets are valid
@@ -467,8 +695,8 @@ class ProgressiveRate(PersonalIncomeTax):
             scale (int): Scaling factor for population-based calculations
             increments_per_year (int): Timesteps per year
             bracket_timeseries (pd.DataFrame): Bracket timeseries for use by country.update_brackets()
-            credits_timeseries (pd.DataFrame): Credit timeseries for use by country.update_credits()
-            credits (dict(PersonalIncomeTaxCredit)): Credit variables 
+            nonrefundable_credit_timeseries (pd.DataFrame): Nonrefundable credit timeseries for use by country.update_credits()
+            nonrefundable_credits (dict(PersonalIncomeTaxCredit)): Nonrefundable credit variables 
         """
 
         self._validate_brackets(brackets)
@@ -477,8 +705,8 @@ class ProgressiveRate(PersonalIncomeTax):
         self.increments_per_year = increments_per_year
 
         self.bracket_timeseries:pd.DataFrame = None
-        self.credit_timeseries:pd.DataFrame = None
-        self.credits = {}
+        self.nonrefundable_credit_timeseries:pd.DataFrame = None
+        self.nonrefundable_credits = {}
 
     def _validate_brackets(self, brackets: list[tuple[float, float]]) -> None:
         """Ensure brackets are valid

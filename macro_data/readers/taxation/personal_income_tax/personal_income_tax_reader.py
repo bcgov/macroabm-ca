@@ -65,7 +65,7 @@ class PersonalIncomeTaxBracketsReader:
         cls,
         data_path: Path | str,
     ) -> PersonalIncomeTaxBracketsReader:
-        """Load the personal income tax credit CSV from disk.
+        """Load the personal income tax bracket CSV from disk.
 
         Args:
             data_path: Path to the CSV file (index_col=0 assumed).
@@ -79,41 +79,41 @@ class PersonalIncomeTaxBracketsReader:
         return cls(brackets=brackets)
 
 @dataclass
-class PersonalIncomeTaxCreditsData:
-    """Container for personal income tax credits data.
+class PersonalIncomeTaxNonrefundableCreditsData:
+    """Container for personal income tax nonrefundable credits data.
 
-    Holds a DataFrame of personal income tax credits for specific years keyed by jurisdiction name.
+    Holds a DataFrame of personal income tax nonrefundable credits for specific years keyed by jurisdiction name.
 
     Attributes:
-        credits (pd.DataFrame): Credits data
+        nonrefundable_credits (pd.DataFrame): Nonrefundable credits data
     """
 
-    credits: Optional[pd.DataFrame] = None
+    nonrefundable_credits: Optional[pd.DataFrame] = None
 
     @property
     def values_dictionary(self) -> dict:
-        """Dict-based access to the credits DataFrame."""
-        return {"credits": self.credits}
+        """Dict-based access to the nonrefundable credits DataFrame."""
+        return {"nonrefundable_credits": self.nonrefundable_credits}
 
     @classmethod
     def from_reader(
         cls,
-        reader: PersonalIncomeTaxCreditsReader,
-    ) -> PersonalIncomeTaxCreditsData:
-        """Build a PersonalIncomeTaxCreditsReader container from a reader.
+        reader: PersonalIncomeTaxNonrefundableCreditsReader,
+    ) -> PersonalIncomeTaxNonrefundableCreditsData:
+        """Build a PersonalIncomeTaxNonrefundableCreditsReader container from a reader.
 
         Args:
-            reader: Loaded PersonalIncomeTaxCreditsReader.
+            reader: Loaded PersonalIncomeTaxNonrefundableCreditsReader.
 
         Returns:
-            PersonalIncomeTaxCreditsReader container ready to be passed to the model.
+            PersonalIncomeTaxNonrefundableCreditsReader container ready to be passed to the model.
         """
-        return cls(credits=reader.credits)
+        return cls(nonrefundable_credits=reader.nonrefundable_credits)
 
 
 @dataclass
-class PersonalIncomeTaxCreditsReader:
-    """Reader for a personal income tax credits CSV.
+class PersonalIncomeTaxNonrefundableCreditsReader:
+    """Reader for a personal income tax nonrefundable credits CSV.
 
     The CSV must have years as the row index and credit, amount, top, rate, clawback, clawback_rate, indexed
     as column headers.
@@ -123,25 +123,25 @@ class PersonalIncomeTaxCreditsReader:
     with utilization in PersonalIncomeTax.compute_individual_nonrefundable_credits().
 
     Attributes:
-        credits: DataFrame loaded from the CSV (None if file absent).
+        nonrefundable_credits: DataFrame loaded from the CSV (None if file absent).
     """
 
-    credits: Optional[pd.DataFrame] = None
+    nonrefundable_credits: Optional[pd.DataFrame] = None
 
     @classmethod
     def read_from_raw_data(
         cls,
         data_path: Path | str,
-    ) -> PersonalIncomeTaxCreditsReader:
-        """Load the personal income tax credit CSV from disk.
+    ) -> PersonalIncomeTaxNonrefundableCreditsReader:
+        """Load the personal income tax nonrefundable credit CSV from disk.
 
         Args:
             data_path: Path to the CSV file (index_col=0 assumed).
 
         Returns:
-            PersonalIncomeTaxCreditsReader with loaded DataFrame (None if file absent).
+            PersonalIncomeTaxNonrefundableCreditsReader with loaded DataFrame (None if file absent).
         """
         if isinstance(data_path, str):
             data_path = Path(data_path)
-        credits = pd.read_csv(data_path, index_col=0) if data_path.exists() else None
-        return cls(credits=credits)
+        nonrefundable_credits = pd.read_csv(data_path, index_col=0) if data_path.exists() else None
+        return cls(nonrefundable_credits=nonrefundable_credits)
