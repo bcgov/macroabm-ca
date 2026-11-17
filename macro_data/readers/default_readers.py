@@ -64,6 +64,7 @@ from macro_data.readers.taxation.personal_income_tax.personal_income_tax_reader 
     PersonalIncomeTaxBracketsReader,
     PersonalIncomeTaxNonrefundableCreditsReader,
 )
+from macro_data.readers.fin_data.donations.donation_reader import DonationReader
 
 @dataclass
 class DataPaths:
@@ -95,6 +96,7 @@ class DataPaths:
         emissions_path (Path): Path to emissions data
         personal_income_tax_brackets_path (Path): Path to personal income tax bracket data
         personal_income_tax_nonrefundable_credits_path (Path): Path to personal income tax nonrefundable credit data
+        donations_path (Path): Path to donations data
     """
 
     goods_criticality_path: Path
@@ -121,6 +123,7 @@ class DataPaths:
     ch4_emissions_path: Optional[Path] = None
     personal_income_tax_brackets_path: Optional[Path] = None
     personal_income_tax_nonrefundable_credits_path: Optional[Path] = None
+    donations_path: Optional[Path] = None
 
     @classmethod
     def default_paths(cls, raw_data_path: Path, icio_years: Iterable[int]):
@@ -162,6 +165,8 @@ class DataPaths:
             / "taxation" / "personal_income_tax" / "personal_income_tax-rates_thresholds.csv",
             personal_income_tax_nonrefundable_credits_path=raw_data_path 
             / "taxation" / "personal_income_tax" / "personal_income_tax-non_refundable_tax_credits.csv",
+            donations_path=raw_data_path.parent 
+            / "raw_data_FIN" / "donations" / "donation_distribution.csv",
         )
 
     # @classmethod
@@ -221,6 +226,7 @@ class DataReaders:
     regions_dict: Optional[dict[Country, list[Region]]] = None
     personal_income_tax_brackets: Optional[PersonalIncomeTaxBracketsReader] = None
     personal_income_tax_nonrefundable_credits: Optional[PersonalIncomeTaxNonrefundableCreditsReader] = None
+    donations: Optional[DonationReader] = None
 
     @classmethod
     def from_raw_data(
@@ -516,6 +522,10 @@ class DataReaders:
                 datapaths.personal_income_tax_nonrefundable_credits_path
                 )
 
+        donations = None
+        if datapaths.donations_path is not None and datapaths.donations_path.exists():
+            donations = DonationReader.read_from_raw_data(datapaths.donations_path)
+
         return cls(
             icio=icio,
             wiod_sea=wiod_sea,
@@ -538,6 +548,7 @@ class DataReaders:
             regions_dict=regions_dict,
             personal_income_tax_brackets=personal_income_tax_brackets,
             personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
+            donations=donations,
         )
 
     @classmethod

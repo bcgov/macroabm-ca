@@ -451,8 +451,56 @@ class PersonalIncomeTax(ABC):
 
         if debug: print(f"tax_reduction {tax_reduction}")
 
-        total_individual_credits = (basic_personal_amount + age_amount + spousal_amount + dependant_amount) * rate # line 56
-        total_individual_credits += tax_reduction                       # line 80
+        # Donations and gifts amount (see Worksheet BC 428 2025 and supplemented by T1 Schedule 9)
+        if "Donations Amount" in self.nonrefundable_credits:
+            
+            # NOTE: self.nonrefundable_credits parameter names (right side of equation) 
+            #       do not map well to the meaning of the donation credit parameters (left side)
+            minimum = self.nonrefundable_credits["Donations Amount"].amount                 # line 2
+            top = self.nonrefundable_credits["Donations Amount"].top                        # line 5
+            percentage_B = self.nonrefundable_credits["Donations Amount"].rate              # line 7
+            percentage_C = self.nonrefundable_credits["Donations Amount"].clawback          # line 8
+            percentage_D = self.nonrefundable_credits["Donations Amount"].clawback_rate     # line 9
+
+            # static credit parameters for testing
+            # top = 259829                                                # line 5
+            # minimum = 200                                               # line 2
+            # percentage_B = 0.205                                        # line 7
+            # percentage_C = 0.168                                        # line 8
+            # percentage_D = 0.0506                                       # line 9
+
+            total_eligible_donations = individuals.states["Total Eligible Donations"][index] / 1000 # TODO: pass scale                             
+            total_eligible_donations_above_min = (
+                total_eligible_donations 
+                - min(total_eligible_donations, minimum)
+            )                                                           # line 2
+            if debug: print(f"total_eligible_donations_above_min {total_eligible_donations_above_min}")
+            
+            if annual_taxable_income_unscaled[index] - top < 0:         # line 6
+                annual_taxable_income_unscaled_above_threshold = 0
+            else:
+                annual_taxable_income_unscaled_above_threshold = annual_taxable_income_unscaled[index] - top
+            if debug: print(f"annual_taxable_income_unscaled_above_threshold {annual_taxable_income_unscaled_above_threshold}")
+
+            A = total_eligible_donations_above_min
+            B = min(total_eligible_donations_above_min, annual_taxable_income_unscaled_above_threshold)     # line 7
+            C = A - B                                                                                       # line 8 
+            D = min(total_eligible_donations, minimum)                                                      # line 9
+            if debug: 
+                print(f"B {B} B * percentage_B {B * percentage_B}") 
+                print(f"C {C} C * percentage_C {C * percentage_C}")
+                print(f"D {D} D * percentage_D {D * percentage_D}") 
+
+            donation_amount = (B * percentage_B) + (C * percentage_C) + (D * percentage_D)
+        else:
+            donation_amount = 0
+
+        if debug: print(f"donation_amount {donation_amount}")
+
+        total_individual_credits = (
+            basic_personal_amount + age_amount + spousal_amount + dependant_amount) * rate  # line 56
+        total_individual_credits += donation_amount                                         # line 57
+        total_individual_credits += tax_reduction                                           # line 80
 
         if debug: print(f"total_credits {total_individual_credits}")
 
@@ -548,10 +596,10 @@ class PersonalIncomeTax(ABC):
                 print(f"hh age {individuals.states["Age"][hh_list]}")
                 print(f"hh income {annual_taxable_income_unscaled[hh_list]}")
 
-        # TODO: implement data readers etc before uncommenting
+        # TODO: implement data readers etc before uncommenting (https://fincsp.atlassian.net/browse/FREDA-352)
         # if "Renter Amount" in self.refundable_credits:
-        #     amount = self.refundable_credits["Renter Amount"].amount                   # line ??? TODO: update
-        #     top = self.refundable_credits["Renter Amount"].top                         # line ??? TODO: update
+        #     amount = self.refundable_credits["Renter Amount"].amount
+        #     top = self.refundable_credits["Renter Amount"].top
         
         amount = 400                                                # line 38
         top = 84764                                                 # credit description

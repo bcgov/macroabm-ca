@@ -125,6 +125,7 @@ class Country:
     assume_zero_noise: bool
     configuration: CountryConfiguration
     personal_income_tax: Optional[PersonalIncomeTax] = None
+    donation_data: Optional[pd.DataFrame] = None
 
     def __init__(
         self,
@@ -153,7 +154,7 @@ class Country:
         emission_factors_lcu_ch4: Optional[np.ndarray] = None,
         emitting_indices_ch4: Optional[np.ndarray] = None,
         personal_income_tax: Optional[PersonalIncomeTax] = None,
-
+        donation_data: Optional[pd.DataFrame] = None,
     ):
         """Initialize a new country economy.
 
@@ -181,6 +182,7 @@ class Country:
             emission_factors_lcu (Optional[np.ndarray]): Emission factors
             emitting_indices (Optional[np.ndarray]): Industry indices that emit
             personal_income_tax (Optional[PersonalIncomeTax]): Peronal Income Tax Policy
+            donation_data (Optional[pd.DataFrame]): Donation data
         """
         # Parameters
         self.country_name = country_name
@@ -228,6 +230,9 @@ class Country:
         self.use_taxation_policies = self.configuration.use_taxation_policies
         self.policy_type = self.configuration.policy_type
         self.personal_income_tax = personal_income_tax
+
+        # Fin data
+        self.donation_data = donation_data
 
     @classmethod
     def from_pickled_country(
@@ -293,6 +298,28 @@ class Country:
             n_industries=n_industries,
             scale=scale,
         )
+        
+        # populate individual states from /raw_data_FIN
+        if (
+            country_configuration.use_taxation_policies 
+            and synthetic_country.donations.data is not None 
+            and country_name == 'CAN_BC'    # only worth running for BC
+        ):
+
+            donation_data = synthetic_country.donations.data
+            donation_data_country = donation_data[(donation_data['jurisdiction'] == country_name)]
+            donation_data_country_year = donation_data_country.loc[[initial_year]]
+
+            print(f"\n{country_name}:")
+
+            individuals.states["Total Eligible Donations"] = individuals.update_states_from_data(
+                scale=scale, 
+                increments_per_year=int(12/country_configuration.time_unit),
+                donation_data=donation_data_country_year,
+                )
+        else:
+            donation_data = None
+        
 
         initial_consumption_by_industry = synthetic_country.industry_data["industry_vectors"][
             "Household Consumption in LCU"
@@ -520,6 +547,7 @@ class Country:
             emission_factors_lcu_ch4=emission_factors_lcu_ch4,
             emitting_indices_ch4=emitting_indices_ch4,
             personal_income_tax=personal_income_tax,
+            donation_data=donation_data,
         )
 
     def reset(self, configuration: CountryConfiguration) -> None:
@@ -1732,6 +1760,22 @@ class Country:
 
         # credit = credit_list[2]
         # print(f"{year} {self.country_name} personal_income_tax.nonrefundable_credits[{credit}].amount {self.personal_income_tax.nonrefundable_credits[credit].amount}")
+
+    def update_states_from_data(self, year:int) -> None:
+        """Update individual states that rely on FIN data based on current timestep - even though the data is yearly.
+            
+        Args:
+            year (int): Year
+        """
+        print(f"{self.country_name}.update_states_from_data()")
+
+        self.individuals.update_states_from_data(
+            # year=self.timestep.year, 
+            scale=self.personal_income_tax.scale, 
+            increments_per_year=self.personal_income_tax.increments_per_year,
+            # country_name=self.country_name,
+            donation_data=self.donation_data,
+        )
 
     def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
         """Convert Enum class values to int

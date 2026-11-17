@@ -116,6 +116,7 @@ from macro_data.readers.taxation.personal_income_tax.personal_income_tax_reader 
     PersonalIncomeTaxBracketsData,
     PersonalIncomeTaxNonrefundableCreditsData,
 )
+from macro_data.readers.fin_data.donations.donation_reader import DonationData
 
 
 @dataclass
@@ -180,7 +181,8 @@ class SyntheticCountry:
     emission_factors_ch4: Optional[CH4EmissionsDataCAN] = None
     historical_emissions_df: Optional[pd.DataFrame] = None
     personal_income_tax_brackets: Optional[PersonalIncomeTaxBracketsData] = None
-    personal_income_tax_nonrefundable_credits: Optional[PersonalIncomeTaxNonrefundableCreditsData] = None 
+    personal_income_tax_nonrefundable_credits: Optional[PersonalIncomeTaxNonrefundableCreditsData] = None
+    donations: Optional[DonationData] = None 
 
     @classmethod
     def eu_synthetic_country(
@@ -368,6 +370,11 @@ class SyntheticCountry:
         else:
             personal_income_tax_nonrefundable_credits = None
 
+        if readers.donations is not None:
+            donations = DonationData.from_reader(readers.donations)
+        else:
+            donations = None
+
         return cls(
             population=population,
             firms=firms,
@@ -398,6 +405,7 @@ class SyntheticCountry:
             ),
             personal_income_tax_brackets=personal_income_tax_brackets,
             personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
+            donations=donations,
         )
 
     @classmethod
@@ -598,6 +606,11 @@ class SyntheticCountry:
         else:
             personal_income_tax_nonrefundable_credits = None
 
+        if readers.donations is not None:
+            donations = DonationData.from_reader(readers.donations)
+        else:
+            donations = None
+
         return cls(
             population=population,
             firms=firms,
@@ -628,6 +641,7 @@ class SyntheticCountry:
             ),
             personal_income_tax_brackets=personal_income_tax_brackets,
             personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
+            donations=donations,
         )
 
     @classmethod

@@ -306,8 +306,14 @@ class Simulation:
         # Update taxation policies for new timestep
         if self.timestep.month == 1:
             for country in self.countries.values():
-                country.update_brackets(self.timestep.year)
-                country.update_nonrefundable_credits(self.timestep.year)
+                if country.use_taxation_policies:
+                    country.update_brackets(self.timestep.year)
+                    country.update_nonrefundable_credits(self.timestep.year)
+
+        # Update individual states that use fin data for new timestep
+        for country in self.countries.values():
+            if country.use_taxation_policies and country.country_name == 'CAN_BC':  # Only used for BC
+                country.update_states_from_data(self.timestep.year)                 # NOTE: incomes change every timestep - even though the donation data is yearly
 
         # self.exchange_rates.set_current_exchange_rates(current_year=self.timestep.year)
 
