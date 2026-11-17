@@ -252,7 +252,9 @@ class SimpleTechnicalGrowth(TechnicalCoefficientsGrowth):
 
         # Calculate quantities used: quantity_ij = production_i * effective_coefficient_ij
         # For intermediate inputs, quantity = production * coefficient (inputs needed per unit output)
+        np.seterr(all='ignore')     # TODO: Investigate cause after 2022 IO table repo update
         quantities = production[:, np.newaxis] * effective_coefficients
+        np.seterr(all='warn')
 
         # Reference cost = price * quantity
         reference_costs = prices[np.newaxis, :] * quantities
@@ -315,7 +317,9 @@ class SimpleTechnicalGrowth(TechnicalCoefficientsGrowth):
 
         # Calculate quantities used: quantity_ij = production_i * effective_coefficient_ij
         # For capital inputs, quantity = production * coefficient (capital needed per unit output)
+        np.seterr(all='ignore')     # TODO: Investigate cause after 2022 IO table repo update
         quantities = production[:, np.newaxis] * effective_coefficients
+        np.seterr(all='warn')
 
         # Reference cost = price * quantity
         reference_costs = prices[np.newaxis, :] * quantities

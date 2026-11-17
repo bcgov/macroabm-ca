@@ -66,6 +66,7 @@ from macromodel.policy.personal_income_tax import ProgressiveRate
 from macromodel.policy.personal_income_tax import FlatRate
 from macromodel.policy.personal_income_tax import PersonalIncomeTaxCredit
 
+from macromodel.policy.state_augmentation import StateAugmentation
 
 class Country:
     """A complete national economy with interacting agents and markets.
@@ -125,7 +126,7 @@ class Country:
     assume_zero_noise: bool
     configuration: CountryConfiguration
     personal_income_tax: Optional[PersonalIncomeTax] = None
-    donation_data: Optional[pd.DataFrame] = None
+    donation_augmentation: Optional[StateAugmentation] = None
 
     def __init__(
         self,
@@ -154,7 +155,7 @@ class Country:
         emission_factors_lcu_ch4: Optional[np.ndarray] = None,
         emitting_indices_ch4: Optional[np.ndarray] = None,
         personal_income_tax: Optional[PersonalIncomeTax] = None,
-        donation_data: Optional[pd.DataFrame] = None,
+        donation_augmentation: Optional[StateAugmentation] = None,
     ):
         """Initialize a new country economy.
 
@@ -182,7 +183,7 @@ class Country:
             emission_factors_lcu (Optional[np.ndarray]): Emission factors
             emitting_indices (Optional[np.ndarray]): Industry indices that emit
             personal_income_tax (Optional[PersonalIncomeTax]): Peronal Income Tax Policy
-            donation_data (Optional[pd.DataFrame]): Donation data
+            donation_augmentation (Optional[StateAugmentation]): Donation state augmentation
         """
         # Parameters
         self.country_name = country_name
@@ -232,7 +233,7 @@ class Country:
         self.personal_income_tax = personal_income_tax
 
         # Fin data
-        self.donation_data = donation_data
+        self.donation_augmentation = donation_augmentation
 
     @classmethod
     def from_pickled_country(
@@ -309,16 +310,10 @@ class Country:
             donation_data = synthetic_country.donations.data
             donation_data_country = donation_data[(donation_data['jurisdiction'] == country_name)]
             donation_data_country_year = donation_data_country.loc[[initial_year]]
-
-            print(f"\n{country_name}:")
-
-            individuals.states["Total Eligible Donations"] = individuals.update_states_from_data(
-                scale=scale, 
-                increments_per_year=int(12/country_configuration.time_unit),
-                donation_data=donation_data_country_year,
-                )
+            
+            donation_augmentation = StateAugmentation(name="Donation",data=donation_data_country_year)
         else:
-            donation_data = None
+            donation_augmentation = None
         
 
         initial_consumption_by_industry = synthetic_country.industry_data["industry_vectors"][
@@ -547,7 +542,7 @@ class Country:
             emission_factors_lcu_ch4=emission_factors_lcu_ch4,
             emitting_indices_ch4=emitting_indices_ch4,
             personal_income_tax=personal_income_tax,
-            donation_data=donation_data,
+            donation_augmentation=donation_augmentation,
         )
 
     def reset(self, configuration: CountryConfiguration) -> None:
@@ -1762,20 +1757,89 @@ class Country:
         # print(f"{year} {self.country_name} personal_income_tax.nonrefundable_credits[{credit}].amount {self.personal_income_tax.nonrefundable_credits[credit].amount}")
 
     def update_states_from_data(self, year:int) -> None:
-        """Update individual states that rely on FIN data based on current timestep - even though the data is yearly.
+        """Update individual states that rely on FIN data to the current timestep (even though the data is yearly)
             
         Args:
             year (int): Year
         """
-        print(f"{self.country_name}.update_states_from_data()")
+        # print(f"START: {self.country_name}.update_states_from_data()")
 
-        self.individuals.update_states_from_data(
-            # year=self.timestep.year, 
-            scale=self.personal_income_tax.scale, 
-            increments_per_year=self.personal_income_tax.increments_per_year,
-            # country_name=self.country_name,
-            donation_data=self.donation_data,
-        )
+        # TODO: update to recalculate StateAugmentation.mu AND StateAugmentation.sigma for current year
+        #       (doing so would put new computation burden on each timestep)
+
+        debug_individual = False
+        debug_overall = False
+
+        # retrieve estimated states for each individual agent
+        assigned_value = np.zeros(self.individuals.n_individuals)
+        for i in range(self.individuals.n_individuals):
+
+            age = self.individuals.states["Age"][i]
+            income_unscaled = self.individuals.ts.current("employee_income")[i] / self.scale * self.personal_income_tax.increments_per_year
+
+            # determine income range of this individual
+            ind_income_bracket_index = None
+            ind_income_bracket_range = None
+            for idx, (low, high) in enumerate(self.donation_augmentation.income_brackets, start=1):
+                if low <= income_unscaled <= high:
+                    ind_income_bracket_index = idx - 1
+                    ind_income_bracket_range = (low, high)
+                    break
+            if debug_individual: print(
+                f"{i} income ${income_unscaled:,.2f} "
+                f"\tbracket_num {ind_income_bracket_index} "
+                f"bracket_range {ind_income_bracket_range}"
+            )
+
+            # determine age range of this individual
+            ind_age_bracket_index = None
+            ind_age_bracket_range = None
+            for idx, (low, high) in enumerate(self.donation_augmentation.age_brackets, start=1):
+                if low <= age <= high:
+                    ind_age_bracket_index = idx - 1
+                    ind_age_bracket_range = (low, high)
+                    break
+            if debug_individual: print(
+                f"{i} age {age:,.2f} "
+                f"\tbracket_num {ind_age_bracket_index} "
+                f"bracket_range {ind_age_bracket_range}"
+            )
+
+            # calculate state value             # NOTE: Must be !SCALED! quarterly amount to interact with model
+            assigned_value[i] = np.random.normal(
+                self.donation_augmentation.state_mu[ind_age_bracket_index][ind_income_bracket_index], 
+                self.donation_augmentation.state_sigma[ind_age_bracket_index][ind_income_bracket_index],
+                ) * self.scale / self.personal_income_tax.increments_per_year
+
+            if assigned_value[i] < 0:           # ensure amount is positive independent of estimation
+                assigned_value[i] = 0
+
+            if debug_overall:                           # test values 
+                ind_indices = [5,10,500,1000,1500,2000,2500]
+                if i in ind_indices:
+                    print(
+                        f"{i} \tage {age} "
+                        f"income ${income_unscaled:,.2f} "
+                        f"amount ${assigned_value[i] / self.scale * self.personal_income_tax.increments_per_year:,.2f}"
+                    )
+
+        if debug_overall:                               # test for max income
+            max_income = np.max(self.individuals.ts.current("employee_income"))    
+            i = np.where(self.individuals.ts.current("employee_income") == max_income)
+            i = i[0]
+            i = i[0]
+            age = self.individuals.states["Age"][i]
+            income_unscaled = self.individuals.ts.current("employee_income")[i] / self.scale * self.personal_income_tax.increments_per_year
+            amount = assigned_value[i] / self.scale * self.personal_income_tax.increments_per_year
+            print(
+                f"{i} \tage {age} "
+                f"income ${income_unscaled:,.2f} "
+                f"amount ${amount:,.2f}"
+            )
+
+        self.individuals.states["Total Eligible Donations"] = assigned_value
+
+        # print(f"END: {self.country_name}.update_states_from_data()")
 
     def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
         """Convert Enum class values to int

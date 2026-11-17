@@ -1,10 +1,21 @@
 """
 Personal Income Tax module
 
-This module implements a multiple rate policies for personal income taxation.
+This module implements policies for personal income taxation.
 """
 
-from macromodel.policy.personal_income_tax import PersonalIncomeTax
-from macromodel.policy.personal_income_tax import PersonalIncomeTaxProtocol
-from macromodel.policy.personal_income_tax import ProgressiveRate
-from macromodel.policy.personal_income_tax import FlatRate
+from macromodel.policy.personal_income_tax import (
+    PersonalIncomeTaxCredit,
+    PersonalIncomeTax, 
+    PersonalIncomeTaxProtocol,
+    ProgressiveRate, 
+    FlatRate,
+)
+
+__all__ = [
+    "PersonalIncomeTaxCredit",
+    "PersonalIncomeTax", 
+    "PersonalIncomeTaxProtocol",
+    "ProgressiveRate", 
+    "FlatRate",
+    ]

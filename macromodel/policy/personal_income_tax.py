@@ -462,14 +462,7 @@ class PersonalIncomeTax(ABC):
             percentage_C = self.nonrefundable_credits["Donations Amount"].clawback          # line 8
             percentage_D = self.nonrefundable_credits["Donations Amount"].clawback_rate     # line 9
 
-            # static credit parameters for testing
-            # top = 259829                                                # line 5
-            # minimum = 200                                               # line 2
-            # percentage_B = 0.205                                        # line 7
-            # percentage_C = 0.168                                        # line 8
-            # percentage_D = 0.0506                                       # line 9
-
-            total_eligible_donations = individuals.states["Total Eligible Donations"][index] / 1000 # TODO: pass scale                             
+            total_eligible_donations = individuals.states["Total Eligible Donations"][index] / self.scale  # already annual value                           
             total_eligible_donations_above_min = (
                 total_eligible_donations 
                 - min(total_eligible_donations, minimum)
