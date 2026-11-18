@@ -163,3 +163,10 @@ macro-dev/
 
 # Local validation outputs from ad hoc model runs
 local_validation/
+
+# Plots
+*.png
+
+# Simulation Outputs
+*.h5
+*.pkl

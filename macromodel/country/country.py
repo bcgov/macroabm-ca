@@ -1764,15 +1764,16 @@ class Country:
             year (int): Year
         """
 
-        self.donation_augmentation.update_states_from_data(
-            age=self.individuals.states["Age"],
-            income_unscaled=(
-                self.individuals.ts.current("taxable_income") 
-                / self.scale * self.personal_income_tax.increments_per_year
-            ),
-            scale=self.scale,
-            increments_per_year=self.personal_income_tax.increments_per_year,
-        )
+        if self.use_taxation_policies and self.donation_augmentation is not None:
+            self.individuals.states["Total Eligible Donations"] = self.donation_augmentation.update_states_from_data(
+                age=self.individuals.states["Age"],
+                income_unscaled=(
+                    self.individuals.ts.current("taxable_income") 
+                    / self.scale * self.personal_income_tax.increments_per_year
+                ),
+                scale=self.scale,
+                increments_per_year=self.personal_income_tax.increments_per_year,
+            )
 
     def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
         """Convert Enum class values to int
@@ -1819,67 +1820,206 @@ class Country:
         self.exogenous.save_to_h5(group)
 
     def save_to_h5_selective(self, agents, h5_file: h5py.File) -> None:
-            """Save complete country state to HDF5.
-    
-            Saves the full state of all agents, markets, and economic variables
-            to an HDF5 file for later analysis or continuation.
-    
-            Args:
-                agents (list[str]): List of agents to save
-                h5_file (h5py.File): Open HDF5 file to save to
-            """
-            print(agents)
-            group = h5_file.create_group(self.country_name)
-            if agents is not None:
-                if 'firms' in agents:
-                    # print("saving firms")
-                    self.firms.save_to_h5(group)
-                    # self.firms.save_industry_firms_df(group)
-                if 'individuals' in agents:
-                    # print("saving individuals")
-                    self.individuals.save_to_h5(group)
-                if 'households' in agents:
-                    # print("saving households")
-                    self.households.save_to_h5(group)
-                    self.households.save_consumption_weights(group)
-                if 'government_entities' in agents:
-                    # print("saving government_entities")
-                    self.government_entities.save_to_h5(group)
-                if 'central_government' in agents:
-                    # print("saving central_government")
-                    self.central_government.save_to_h5(group)
-                if 'banks' in agents:
-                    # print("saving banks")
-                    self.banks.save_to_h5(group)
-                if 'central_bank' in agents:
-                    # print("saving central_bank")
-                    self.central_bank.save_to_h5(group)
-                if 'economy' in agents:
-                    # print("saving economy")
-                    self.economy.save_to_h5(group)
-                if 'markets' in agents:
-                    # print("saving markets")
-                    self.labour_market.save_to_h5(group)
-                    self.credit_market.save_to_h5(group)
-                    self.housing_market.save_to_h5(group)
-                if 'exogenous' in agents:
-                    # print("saving exogenous")
-                    self.exogenous.save_to_h5(group)
-            else:
+        """Save country state for selected agents to HDF5.
+
+        Saves the full state of selected agents, markets, and economic variables
+        to an HDF5 file for later analysis or continuation.
+
+        Args:
+            agents (list[str]): List of agents to save
+            h5_file (h5py.File): Open HDF5 file to save to
+        """
+        print(agents)
+        group = h5_file.create_group(self.country_name)
+        if agents is not None:
+            if 'firms' in agents:
+                # print("saving firms")
                 self.firms.save_to_h5(group)
                 # self.firms.save_industry_firms_df(group)
+            if 'individuals' in agents:
+                # print("saving individuals")
                 self.individuals.save_to_h5(group)
+            if 'households' in agents:
+                # print("saving households")
                 self.households.save_to_h5(group)
                 self.households.save_consumption_weights(group)
+            if 'government_entities' in agents:
+                # print("saving government_entities")
                 self.government_entities.save_to_h5(group)
+            if 'central_government' in agents:
+                # print("saving central_government")
                 self.central_government.save_to_h5(group)
+            if 'banks' in agents:
+                # print("saving banks")
                 self.banks.save_to_h5(group)
+            if 'central_bank' in agents:
+                # print("saving central_bank")
                 self.central_bank.save_to_h5(group)
+            if 'economy' in agents:
+                # print("saving economy")
                 self.economy.save_to_h5(group)
+            if 'markets' in agents:
+                # print("saving markets")
                 self.labour_market.save_to_h5(group)
                 self.credit_market.save_to_h5(group)
                 self.housing_market.save_to_h5(group)
+            if 'exogenous' in agents:
+                # print("saving exogenous")
                 self.exogenous.save_to_h5(group)
+        else:
+            self.firms.save_to_h5(group)
+            # self.firms.save_industry_firms_df(group)
+            self.individuals.save_to_h5(group)
+            self.households.save_to_h5(group)
+            self.households.save_consumption_weights(group)
+            self.government_entities.save_to_h5(group)
+            self.central_government.save_to_h5(group)
+            self.banks.save_to_h5(group)
+            self.central_bank.save_to_h5(group)
+            self.economy.save_to_h5(group)
+            self.labour_market.save_to_h5(group)
+            self.credit_market.save_to_h5(group)
+            self.housing_market.save_to_h5(group)
+            self.exogenous.save_to_h5(group)
+
+    def save_to_h5_selective_timeseries(self, countries, agents, variables, h5_file: h5py.File) -> None:
+        """Save selected timeseries for a country state to HDF5.
+
+        Saves the selected state of selected agents, markets, and economic variables
+        to an HDF5 file for later analysis or continuation.
+
+        Args:
+            countries (list[str]): List of countries to save
+            agents (list[str]): List of agents to save
+            variables (list[str]): List of variables to save
+            h5_file (h5py.File): Open HDF5 file to save to
+        """
+        debug = False
+
+        if debug: print(f"{self.country_name}.save_to_h5_selective_timeseries()")
+
+        agent_country_subset = []
+        variables_country_sunset = []
+        for i in range(len(variables)):                         # identify pertinent variables
+            if self.country_name == countries[i]:
+                agent_country_subset.append(agents[i])
+                variables_country_sunset.append(variables[i])
+
+        group = h5_file.create_group(self.country_name)
+        if agent_country_subset is not None:
+
+            if 'firms' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'firms' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.firms.ts.write_selective_timeseries_to_h5("firms", group, variables_agent_subset)
+                # self.firms.save_industry_firms_df(group)
+
+            if 'individuals' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'individuals' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.individuals.ts.write_selective_timeseries_to_h5("individuals", group, variables_agent_subset)
+
+            if 'households' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'households' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.households.ts.write_selective_timeseries_to_h5("households", group, variables_agent_subset)
+                self.households.save_consumption_weights(group)
+
+            if 'government_entities' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'government_entities' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.government_entities.ts.write_selective_timeseries_to_h5("government_entities", group, variables_agent_subset)
+
+            if 'central_government' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'central_government' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.central_government.ts.write_selective_timeseries_to_h5("central_government", group, variables_agent_subset)
+
+            if 'banks' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'banks' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.banks.ts.write_selective_timeseries_to_h5("banks", group, variables_agent_subset)
+
+            if 'central_bank' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'central_bank' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.central_bank.ts.write_selective_timeseries_to_h5("central_bank", group, variables_agent_subset)
+
+            if 'economy' in agent_country_subset:
+                agent_agent_subset = []
+                variables_agent_subset = []
+                for j in range(len(variables_country_sunset)):  # identify pertinent variables
+                    if 'economy' == agent_country_subset[j]:
+                        agent_agent_subset.append(agent_country_subset[j])
+                        variables_agent_subset.append(variables_country_sunset[j])
+                if debug: print(f"saving {agent_agent_subset} {variables_agent_subset}")
+
+                self.economy.ts.write_selective_timeseries_to_h5("economy", group, variables_agent_subset)
+
+            if 'markets' in agent_country_subset:
+                self.labour_market.save_to_h5(group)
+                self.credit_market.save_to_h5(group)
+                self.housing_market.save_to_h5(group)
+
+            if 'exogenous' in agent_country_subset:
+                self.exogenous.save_to_h5(group)
+        else:
+            self.firms.save_to_h5(group)
+            # self.firms.save_industry_firms_df(group)
+            self.individuals.save_to_h5(group)
+            self.households.save_to_h5(group)
+            self.households.save_consumption_weights(group)
+            self.government_entities.save_to_h5(group)
+            self.central_government.save_to_h5(group)
+            self.banks.save_to_h5(group)
+            self.central_bank.save_to_h5(group)
+            self.economy.save_to_h5(group)
+            self.labour_market.save_to_h5(group)
+            self.credit_market.save_to_h5(group)
+            self.housing_market.save_to_h5(group)
+            self.exogenous.save_to_h5(group)
 
     def shallow_output(self) -> pd.DataFrame:
         """Create summary DataFrame of key economic indicators.

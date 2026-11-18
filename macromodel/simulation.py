@@ -499,6 +499,62 @@ class Simulation:
                 else:
                     country.save_to_h5(f)
 
+    def save_selective_timeseries(self, ts_list, save_dir: Path | str, file_name: str):
+        """Save the selected simulation states to an HDF5 file.
+
+        Saves only specific timeseries simulation data. Includes 
+        configuration and random seed state to a file for later analysis
+        or continuation.
+
+        Args:
+            save_dir (Path | str): Directory to save the file in
+            ts_list (list[str]): List of timeseries to save
+            file_name (str): Name of the output file
+        """
+        debug = False
+
+        countries = []
+        agents = []
+        variables = []
+        for ts_name in ts_list:
+            # find '/' in ts_name
+            str_indices = []
+            str_start = 0
+            while True:
+                idx = ts_name.find('/', str_start)
+                if idx == -1:
+                    break
+                str_indices.append(idx)
+                str_start = idx + len('/')
+        
+            # identify components
+            countries.append(ts_name[: str_indices[0]])
+            agents.append(ts_name[str_indices[0] + 1 : str_indices[1]])
+            variables.append(ts_name[str_indices[1] + 1:])
+        
+            if debug: print(f"Save -> country: {countries[-1]} agent: {agents[-1]} variable: {variables[-1]}")
+
+        if isinstance(save_dir, str):
+            save_dir = Path(save_dir)
+        with h5py.File(save_dir / file_name, "w") as f:
+            self.save_random_seed(f)
+            self.save_configuration(f)
+            # self.exchange_rates.save_to_h5(f)
+            if countries is not None:
+                if 'ROW' in countries:
+                    self.rest_of_the_world.save_to_h5(f)
+            else:
+                self.rest_of_the_world.save_to_h5(f)
+            self.goods_market.save_to_h5(f)
+            for country in self.countries.values():
+
+                if countries is not None:
+                    if country.country_name in countries:
+                        country.save_to_h5_selective_timeseries(countries, agents, variables, f)
+                else:
+                    country.save_to_h5(f)
+
+
     def shallow_df_dict(self):
         """Create a dictionary of shallow (summary) DataFrames for each country.
 

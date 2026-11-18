@@ -168,6 +168,28 @@ class TimeSeries:
                 for i in range(len(self.historic(field))):
                     logging.error(self.historic(field)[i].shape)
 
+    def write_selective_timeseries_to_h5(self, agent_name: str, country_group: h5py.Group, variables: list[str]) -> None:
+        """Write selected time series data to an HDF5 file.
+
+        Args:
+            agent_name (str): Name of the agent (used as group name in HDF5)
+            country_group (h5py.Group): HDF5 group to write to
+            variables (list[str]): List of variables to save
+
+        Note:
+            Handles errors for inhomogeneous shapes by logging the problematic fields
+        """
+        agent_group = country_group.create_group(agent_name)
+        for field in self.get_keys():
+            if field in variables:
+                try:
+                    ts_data = np.array(self.historic(field))
+                    self.write_field_to_h5(ts_data, field, agent_group)
+                except ValueError:
+                    logging.error("inhomogeneous shape", agent_name, field)
+                    for i in range(len(self.historic(field))):
+                        logging.error(self.historic(field)[i].shape)
+
     def write_field_to_h5(self, ts_data: np.ndarray, field: str, agent_group: h5py.Group) -> None:
         """Write a single time series field to an HDF5 file.
 
