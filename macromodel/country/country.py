@@ -887,6 +887,7 @@ class Country:
             self.individuals.ts.personal_income_tax_credit_cost_spouse.append(np.zeros(self.individuals.n_individuals))
             self.individuals.ts.personal_income_tax_credit_cost_dependant.append(np.zeros(self.individuals.n_individuals))
             self.individuals.ts.personal_income_tax_credit_cost_reduction.append(np.zeros(self.individuals.n_individuals))
+            self.individuals.ts.personal_income_tax_credit_cost_donation.append(np.zeros(self.individuals.n_individuals))
 
             # Calculate taxes owed and reconcile
             self.personal_income_tax.compute_personal_income_tax_owed(
@@ -1762,84 +1763,16 @@ class Country:
         Args:
             year (int): Year
         """
-        # print(f"START: {self.country_name}.update_states_from_data()")
 
-        # TODO: update to recalculate StateAugmentation.mu AND StateAugmentation.sigma for current year
-        #       (doing so would put new computation burden on each timestep)
-
-        debug_individual = False
-        debug_overall = False
-
-        # retrieve estimated states for each individual agent
-        assigned_value = np.zeros(self.individuals.n_individuals)
-        for i in range(self.individuals.n_individuals):
-
-            age = self.individuals.states["Age"][i]
-            income_unscaled = self.individuals.ts.current("employee_income")[i] / self.scale * self.personal_income_tax.increments_per_year
-
-            # determine income range of this individual
-            ind_income_bracket_index = None
-            ind_income_bracket_range = None
-            for idx, (low, high) in enumerate(self.donation_augmentation.income_brackets, start=1):
-                if low <= income_unscaled <= high:
-                    ind_income_bracket_index = idx - 1
-                    ind_income_bracket_range = (low, high)
-                    break
-            if debug_individual: print(
-                f"{i} income ${income_unscaled:,.2f} "
-                f"\tbracket_num {ind_income_bracket_index} "
-                f"bracket_range {ind_income_bracket_range}"
-            )
-
-            # determine age range of this individual
-            ind_age_bracket_index = None
-            ind_age_bracket_range = None
-            for idx, (low, high) in enumerate(self.donation_augmentation.age_brackets, start=1):
-                if low <= age <= high:
-                    ind_age_bracket_index = idx - 1
-                    ind_age_bracket_range = (low, high)
-                    break
-            if debug_individual: print(
-                f"{i} age {age:,.2f} "
-                f"\tbracket_num {ind_age_bracket_index} "
-                f"bracket_range {ind_age_bracket_range}"
-            )
-
-            # calculate state value             # NOTE: Must be !SCALED! quarterly amount to interact with model
-            assigned_value[i] = np.random.normal(
-                self.donation_augmentation.state_mu[ind_age_bracket_index][ind_income_bracket_index], 
-                self.donation_augmentation.state_sigma[ind_age_bracket_index][ind_income_bracket_index],
-                ) * self.scale / self.personal_income_tax.increments_per_year
-
-            if assigned_value[i] < 0:           # ensure amount is positive independent of estimation
-                assigned_value[i] = 0
-
-            if debug_overall:                           # test values 
-                ind_indices = [5,10,500,1000,1500,2000,2500]
-                if i in ind_indices:
-                    print(
-                        f"{i} \tage {age} "
-                        f"income ${income_unscaled:,.2f} "
-                        f"amount ${assigned_value[i] / self.scale * self.personal_income_tax.increments_per_year:,.2f}"
-                    )
-
-        if debug_overall:                               # test for max income
-            max_income = np.max(self.individuals.ts.current("employee_income"))    
-            i = np.where(self.individuals.ts.current("employee_income") == max_income)
-            i = i[0]
-            i = i[0]
-            age = self.individuals.states["Age"][i]
-            income_unscaled = self.individuals.ts.current("employee_income")[i] / self.scale * self.personal_income_tax.increments_per_year
-            amount = assigned_value[i] / self.scale * self.personal_income_tax.increments_per_year
-            print(
-                f"{i} \tage {age} "
-                f"income ${income_unscaled:,.2f} "
-                f"amount ${amount:,.2f}"
-            )
-
-        self.individuals.states["Total Eligible Donations"] = assigned_value
-
-        # print(f"END: {self.country_name}.update_states_from_data()")
+        self.donation_augmentation.update_states_from_data(
+            age=self.individuals.states["Age"],
+            income_unscaled=(
+                self.individuals.ts.current("taxable_income") 
+                / self.scale * self.personal_income_tax.increments_per_year
+            ),
+            scale=self.scale,
+            increments_per_year=self.personal_income_tax.increments_per_year,
+        )
 
     def convert_enum_to_numpy(self, temp_enum: list[Enum])-> np.ndarray:
         """Convert Enum class values to int

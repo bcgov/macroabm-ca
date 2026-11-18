@@ -303,10 +303,10 @@ class PersonalIncomeTax(ABC):
         for credit in credit_list:
             individuals.states["Credit Cost"][index][credit] = 0
 
-        # NOTE: see Form BC428
+        # reset rate
         rate = 0
 
-        # Basic personal amount
+        # Basic personal amount     # NOTE: see Form BC428
         if "Personal Amount" in self.nonrefundable_credits:
             basic_personal_amount = self.nonrefundable_credits["Personal Amount"].amount  # line 16
             rate = self.nonrefundable_credits["Personal Amount"].rate                     # line 55
@@ -399,7 +399,7 @@ class PersonalIncomeTax(ABC):
 
         if debug: print(f"spousal_amount {spousal_amount}")
 
-        # Eligible dependant    # NOTE: see Form BC428
+        # Eligible dependant    # NOTE: see Worksheet BC428 2025
         if "Dependant Amount" in self.nonrefundable_credits:
             amount = self.nonrefundable_credits["Dependant Amount"].amount                # line 23
             top = self.nonrefundable_credits["Dependant Amount"].top                      # line 21
@@ -426,32 +426,7 @@ class PersonalIncomeTax(ABC):
 
         if debug: print(f"dependant_amount {dependant_amount}")
 
-        if "Tax Reduction" in self.nonrefundable_credits:
-            amount = self.nonrefundable_credits["Tax Reduction"].amount                # line 73
-            top = self.nonrefundable_credits["Tax Reduction"].top                      # line 75
-            clawback_rate = self.nonrefundable_credits["Tax Reduction"].clawback_rate  # line 77
-
-            if annual_taxable_income_unscaled[index] > top:
-                tax_reduction = 0
-            else:
-                clawback = (annual_taxable_income_unscaled[index] - top) * clawback_rate
-                if clawback < 0:
-                    clawback = 0
-                tax_reduction = amount - clawback
-
-            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
-                tax_burden_remaining = tax_burden_remaining,
-                amount = tax_reduction,
-                rate = 1,
-                )
-            individuals.states["Credit Cost"][index]["Tax Reduction"], tax_burden_remaining = credit_cost_tuple
-        else:
-            tax_reduction = 0   # for jurisdictions outside of BC
-            individuals.states["Credit Cost"][index]["Tax Reduction"] = 0
-
-        if debug: print(f"tax_reduction {tax_reduction}")
-
-        # Donations and gifts amount (see Worksheet BC 428 2025 and supplemented by T1 Schedule 9)
+        # Donations and gifts amount # NOTE: see Worksheet BC 428 2025 (and supplemented by T1 Schedule 9)
         if "Donations Amount" in self.nonrefundable_credits:
             
             # NOTE: self.nonrefundable_credits parameter names (right side of equation) 
@@ -485,10 +460,43 @@ class PersonalIncomeTax(ABC):
                 print(f"D {D} D * percentage_D {D * percentage_D}") 
 
             donation_amount = (B * percentage_B) + (C * percentage_C) + (D * percentage_D)
+
+            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
+                tax_burden_remaining = tax_burden_remaining,
+                amount = donation_amount,
+                rate = 1,       # set 1 for credits already calculated as a $ amount (those below line 56)
+                )
+            individuals.states["Credit Cost"][index]["Donations Amount"], tax_burden_remaining = credit_cost_tuple
         else:
             donation_amount = 0
+            individuals.states["Credit Cost"][index]["Donations Amount"] = 0
 
         if debug: print(f"donation_amount {donation_amount}")
+
+        if "Tax Reduction" in self.nonrefundable_credits:
+            amount = self.nonrefundable_credits["Tax Reduction"].amount                # line 73
+            top = self.nonrefundable_credits["Tax Reduction"].top                      # line 75
+            clawback_rate = self.nonrefundable_credits["Tax Reduction"].clawback_rate  # line 77
+
+            if annual_taxable_income_unscaled[index] > top:
+                tax_reduction = 0
+            else:
+                clawback = (annual_taxable_income_unscaled[index] - top) * clawback_rate
+                if clawback < 0:
+                    clawback = 0
+                tax_reduction = amount - clawback
+
+            credit_cost_tuple = self.compute_nonrefundable_credit_cost(
+                tax_burden_remaining = tax_burden_remaining,
+                amount = tax_reduction,
+                rate = 1,       # set 1 for credits already calculated as a $ amount (those below line 56)
+                )
+            individuals.states["Credit Cost"][index]["Tax Reduction"], tax_burden_remaining = credit_cost_tuple
+        else:
+            tax_reduction = 0   # for jurisdictions outside of BC
+            individuals.states["Credit Cost"][index]["Tax Reduction"] = 0
+
+        if debug: print(f"tax_reduction {tax_reduction}")
 
         total_individual_credits = (
             basic_personal_amount + age_amount + spousal_amount + dependant_amount) * rate  # line 56
@@ -513,6 +521,12 @@ class PersonalIncomeTax(ABC):
         individuals.ts.current("personal_income_tax_credit_cost_reduction")[index] = (
             individuals.states["Credit Cost"][index]["Tax Reduction"]
         )
+        if "Donations Amount" in self.nonrefundable_credits:
+            individuals.ts.current("personal_income_tax_credit_cost_donation")[index] = (
+                individuals.states["Credit Cost"][index]["Donations Amount"]
+            )
+        else:
+            individuals.ts.current("personal_income_tax_credit_cost_donation")[index] = 0
 
         return total_individual_credits
 

@@ -78,7 +78,7 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         reservation_wages=data["Employee Income"].values + data["Income from Unemployment Benefits"].values,
 
         # Personal Income Tax
-        employee_income_gross=data["Income from Unemployment Benefits"].values,
+        employee_income_gross=data["Employee Income"].values,
         taxable_income=data["Employee Income"].values,                                  # TODO: find a better start value
         taxable_income_employment=data["Employee Income"].values,                       # TODO: find a better start value
         taxable_income_unemployment=data["Income from Unemployment Benefits"].values,   # TODO: find a better start value
@@ -98,6 +98,7 @@ def create_individuals_timeseries(data: pd.DataFrame, scale: int) -> TimeSeries:
         personal_income_tax_credit_cost_spouse=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
         personal_income_tax_credit_cost_dependant=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
         personal_income_tax_credit_cost_reduction=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
+        personal_income_tax_credit_cost_donation=np.zeros(len(data)),    # temporary TODO: fix for dynamic number of credits
     )
 
 def create_individuals_states_timeseries(
