@@ -808,7 +808,7 @@ class Households(Agent):
 
         # Set what's up for rent
         prev_up_for_rent = housing_data["Up for Rent"].values
-        now_up_for_rent = np.where(np.isnan(housing_data["Corresponding Inhabitant Household ID"].values))[0]
+        now_up_for_rent = np.where(housing_data["Corresponding Inhabitant Household ID"].values == -1)[0]   
         newly_up_for_rent = [ind for ind in now_up_for_rent if ind not in prev_up_for_rent]
         housing_data["Up for Rent"] = False
         housing_data.loc[now_up_for_rent, "Up for Rent"] = True
@@ -1164,6 +1164,21 @@ class Households(Agent):
             self.ts.refined_products_consumption_emissions.append(disaggregated_emissions[:, 3])
 
         # Consumption
+        tau_vat_vector = np.zeros(np.shape(consumption_by_good)[1])
+        tau_vat_vector.fill(tau_vat)
+
+        # Method 1: Uses a vector tau_vat_vector 
+        consumption_by_good_mod = np.multiply((1.0 + tau_vat_vector), consumption_by_good)
+        consumption_mod = consumption_by_good_mod.sum(axis=1)
+        total_consumption_mod = consumption_mod.sum()
+
+        # Method 2: Original
+        consumption = consumption_by_good.sum(axis=1)
+        total_consumption = (1 + tau_vat) * consumption.sum()
+
+        if total_consumption_mod == total_consumption:
+            print("success both methods are equivalent!")
+
         self.ts.consumption.append(consumption_by_good.sum(axis=1))
         self.ts.total_consumption.append([(1 + tau_vat) * self.ts.current("consumption").sum()])
         self.ts.total_consumption_before_vat.append([self.ts.current("consumption").sum()])

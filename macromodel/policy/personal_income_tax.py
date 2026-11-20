@@ -138,10 +138,9 @@ class PersonalIncomeTax(ABC):
             individuals_taxable_income_unemployment[i] = individuals.ts.current("income_from_unemployment_benefits")[i]
 
             # caclulate rental income (assuming it is split between all adult residents)
-            # NOTE: evidence suggests "income_rental" isn't functioning properly 
-            # - "income_rental" is always zero 
-            #   WHILE self.households.ts.current("rent")[self.households.states["Tenure Status of the Main Residence"] == 3].sum()
-            #   is > 0
+            # NOTE: evidence suggests housing market isn't function properly. 
+            #       households/income_rental is magnitudes smaller than individuals/employee_income.
+            #       households/income_rental is similar magnitude to individuals/income_from_unemployment_benefits.
             individuals_taxable_income_rental[i] = 0
             if individuals.states["Corresponding Household ID"][i] != 0:       # check if belongs to a hh
                 hh_id = individuals.states["Corresponding Household ID"][i]    # identify which hh it belongs to
@@ -154,6 +153,13 @@ class PersonalIncomeTax(ABC):
                         households.ts.current("income_rental")[hh_id] / 
                         households.states["Number of Adults"][hh_id]
                     )
+                    # ind = [0,10,25,50,100,200,300,400]    # sample rental_incomes
+                    # if i in ind:
+                    #     print(
+                    #         f"i {i} ind_rental {individuals_taxable_income_rental[i]} "
+                    #         f"hh_id {hh_id} hh_rental {households.ts.current("income_rental")[hh_id]} "
+                    #         f"n_adults {households.states["Number of Adults"][hh_id]}"
+                    #     )
 
             individuals_taxable_income[i] = (
                 individuals_taxable_income_employment[i] +
