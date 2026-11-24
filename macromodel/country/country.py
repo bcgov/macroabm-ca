@@ -65,6 +65,7 @@ from macromodel.policy.personal_income_tax import PersonalIncomeTax
 from macromodel.policy.personal_income_tax import ProgressiveRate
 from macromodel.policy.personal_income_tax import FlatRate
 from macromodel.policy.personal_income_tax import PersonalIncomeTaxCredit
+from macromodel.policy.consumer_tax import ConsumerTax
 
 from macromodel.policy.state_augmentation import StateAugmentation
 
@@ -126,6 +127,7 @@ class Country:
     assume_zero_noise: bool
     configuration: CountryConfiguration
     personal_income_tax: Optional[PersonalIncomeTax] = None
+    consumer_tax: Optional[ConsumerTax] = None
     donation_augmentation: Optional[StateAugmentation] = None
 
     def __init__(
@@ -155,6 +157,7 @@ class Country:
         emission_factors_lcu_ch4: Optional[np.ndarray] = None,
         emitting_indices_ch4: Optional[np.ndarray] = None,
         personal_income_tax: Optional[PersonalIncomeTax] = None,
+        consumer_tax: Optional[ConsumerTax] = None,
         donation_augmentation: Optional[StateAugmentation] = None,
     ):
         """Initialize a new country economy.
@@ -182,7 +185,8 @@ class Country:
             add_emissions (bool): If True, track emissions
             emission_factors_lcu (Optional[np.ndarray]): Emission factors
             emitting_indices (Optional[np.ndarray]): Industry indices that emit
-            personal_income_tax (Optional[PersonalIncomeTax]): Peronal Income Tax Policy
+            personal_income_tax (Optional[PersonalIncomeTax]): Peronal income tax policy
+            consumer_tax (Optional[ConsumerTax]): Consumer tax policy
             donation_augmentation (Optional[StateAugmentation]): Donation state augmentation
         """
         # Parameters
@@ -231,6 +235,7 @@ class Country:
         self.use_taxation_policies = self.configuration.use_taxation_policies
         self.policy_type = self.configuration.policy_type
         self.personal_income_tax = personal_income_tax
+        self.consumer_tax = consumer_tax
 
         # Fin data
         self.donation_augmentation = donation_augmentation
@@ -314,130 +319,8 @@ class Country:
             donation_augmentation = StateAugmentation(name="Donation",data=donation_data_country_year)
         else:
             donation_augmentation = None
-        
 
-        initial_consumption_by_industry = synthetic_country.industry_data["industry_vectors"][
-            "Household Consumption in LCU"
-        ]
-        emission_fractions = synthetic_country.emission_fractions
-
-        households = Households.from_pickled_agent(
-            synthetic_population=synthetic_population,
-            synthetic_country=synthetic_country,
-            configuration=country_configuration.households,
-            country_name=country_name,
-            all_country_names=all_country_names,
-            industries=industries,
-            initial_consumption_by_industry=initial_consumption_by_industry,
-            value_added_tax=synthetic_country.tax_data.value_added_tax,
-            scale=scale,
-            add_emissions=add_emissions,
-            emission_fractions=emission_fractions,
-        )
-
-        average_initial_price = synthetic_country.industry_data["industry_vectors"]["Average Initial Price"].values
-        firm_exo_prices = synthetic_country.firm_exo_prices
-        if firm_exo_prices is not None:
-            firm_exo_prices.initial_year = initial_year
-            firm_exo_prices.initial_model_prices = average_initial_price
-        firms = Firms.from_pickled_agent(
-            synthetic_firms=synthetic_country.firms,
-            configuration=country_configuration.firms,
-            country_name=country_name,
-            all_country_names=all_country_names,
-            goods_criticality_matrix=synthetic_country.goods_criticality_matrix,
-            average_initial_price=average_initial_price,
-            industries=industries,
-            add_emissions=add_emissions,
-            emission_fractions=emission_fractions,
-            firm_exo_prices=firm_exo_prices,
-        )
-
-        taxes_less_subsidies = synthetic_country.industry_data["industry_vectors"]["Taxes Less Subsidies Rates"].values
-
-        n_unemployed = (individuals.states["Activity Status"] == ActivityStatus.UNEMPLOYED).sum()
-
-        central_government = CentralGovernment.from_pickled_agent(
-            synthetic_central_government=synthetic_country.central_government,
-            configuration=country_configuration.central_government,
-            country_name=country_name,
-            all_country_names=all_country_names,
-            taxes_net_subsidies=taxes_less_subsidies,
-            number_of_unemployed_individuals=n_unemployed,
-            tax_data=synthetic_country.tax_data,
-            n_industries=n_industries,
-        )
-
-        government_entities = GovernmentEntities.from_pickled_agent(
-            synthetic_government_entities=synthetic_country.government_entities,
-            configuration=country_configuration.government_entities,
-            country_name=country_name,
-            all_country_names=all_country_names,
-            n_industries=n_industries,
-            add_emissions=add_emissions,
-            emission_factors_lcu=emission_factors_lcu,
-            emitting_indices=emitting_indices,
-        )
-
-        banks = Banks.from_pickled_agent(
-            synthetic_banks=synthetic_country.banks,
-            configuration=country_configuration.banks,
-            policy_rate_markup=synthetic_country.policy_rate_markup,
-            country_name=country_name,
-            all_country_names=all_country_names,
-            n_industries=n_industries,
-            scale=scale,
-        )
-
-        central_bank = CentralBank.from_pickled_agent(
-            synthetic_central_bank=synthetic_country.central_bank,
-            configuration=country_configuration.central_bank,
-            country_name=country_name,
-            all_country_names=all_country_names,
-            n_industries=n_industries,
-        )
-
-        exogenous = Exogenous.from_pickled_agent(
-            synthetic_country=synthetic_country,
-            exchange_rates=exchange_rates,
-            country_name=country_name,
-            initial_year=initial_year,
-            t_max=t_max,
-        )
-
-        economy = Economy.from_agents(
-            country_name=country_name,
-            all_country_names=all_country_names,
-            economy_configuration=country_configuration.economy,
-            individuals=individuals,
-            firms=firms,
-            central_government=central_government,
-            government_entities=government_entities,
-            households=households,
-            industry_vectors=synthetic_country.industry_data["industry_vectors"],
-            exogenous=exogenous,
-        )
-
-        labour_market = LabourMarket.from_agents(
-            individuals=individuals,
-            labour_market_configuration=country_configuration.labour_market,
-            country_name=country_name,
-            n_industries=n_industries,
-        )
-
-        credit_market = CreditMarket.from_pickled_market(
-            synthetic_credit_market=synthetic_country.credit_market,
-            credit_market_configuration=country_configuration.credit_market,
-            country_name=country_name,
-        )
-
-        housing_market = HousingMarket.from_pickled_market(
-            synthetic_housing_market=synthetic_country.housing_market,
-            housing_market_configuration=country_configuration.housing_market,
-            country_name=country_name,
-            scale=scale,
-        )
-
+        # Personal Income Tax
         if country_configuration.use_taxation_policies and synthetic_country.personal_income_tax_brackets is not None:
             # import bracket timeseries
             if country_configuration.simple_bracket is None:
@@ -516,6 +399,150 @@ class Country:
         else:
             personal_income_tax = None
 
+        # Consumer Tax
+        if country_configuration.use_taxation_policies and synthetic_country.consumer_tax_rates is not None:
+            # Import PST rate timeseries 
+            # TODO: Properly calculate effective PST rates for each industry (see https://fincsp.atlassian.net/browse/FREDA-455)
+            consumer_tax_all = synthetic_country.consumer_tax_rates.data
+            consumer_tax_country = consumer_tax_all[(consumer_tax_all['jurisdiction'] == 'CAN_BC')]          # NOTE: Temporarily assume all provinces follow BC rates     
+            # consumer_tax_country = consumer_tax_all[(consumer_tax_all['jurisdiction'] == country_name)]    # TODO: Use this version once rates for all provinces are available
+            consumer_tax_country_year = consumer_tax_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
+
+            rates = consumer_tax_country_year["rate"].values
+            consumer_tax = ConsumerTax(
+                rates=rates,
+                scale=scale,
+                increments_per_year=int(12/country_configuration.time_unit), 
+            )
+
+            consumer_tax.rates_timeseries = consumer_tax_country # store complete timeseries for this country           
+        else:
+            consumer_tax = None
+        
+        initial_consumption_by_industry = synthetic_country.industry_data["industry_vectors"][
+            "Household Consumption in LCU"
+        ]
+        emission_fractions = synthetic_country.emission_fractions
+
+        households = Households.from_pickled_agent(
+            synthetic_population=synthetic_population,
+            synthetic_country=synthetic_country,
+            configuration=country_configuration.households,
+            country_name=country_name,
+            all_country_names=all_country_names,
+            industries=industries,
+            initial_consumption_by_industry=initial_consumption_by_industry,
+            value_added_tax=synthetic_country.tax_data.value_added_tax,
+            scale=scale,
+            add_emissions=add_emissions,
+            emission_fractions=emission_fractions,
+            consumer_tax=consumer_tax,
+        )
+
+        average_initial_price = synthetic_country.industry_data["industry_vectors"]["Average Initial Price"].values
+        firm_exo_prices = synthetic_country.firm_exo_prices
+        if firm_exo_prices is not None:
+            firm_exo_prices.initial_year = initial_year
+            firm_exo_prices.initial_model_prices = average_initial_price
+        firms = Firms.from_pickled_agent(
+            synthetic_firms=synthetic_country.firms,
+            configuration=country_configuration.firms,
+            country_name=country_name,
+            all_country_names=all_country_names,
+            goods_criticality_matrix=synthetic_country.goods_criticality_matrix,
+            average_initial_price=average_initial_price,
+            industries=industries,
+            add_emissions=add_emissions,
+            emission_fractions=emission_fractions,
+            firm_exo_prices=firm_exo_prices,
+        )
+
+        taxes_less_subsidies = synthetic_country.industry_data["industry_vectors"]["Taxes Less Subsidies Rates"].values
+
+        n_unemployed = (individuals.states["Activity Status"] == ActivityStatus.UNEMPLOYED).sum()
+
+        central_government = CentralGovernment.from_pickled_agent(
+            synthetic_central_government=synthetic_country.central_government,
+            configuration=country_configuration.central_government,
+            country_name=country_name,
+            all_country_names=all_country_names,
+            taxes_net_subsidies=taxes_less_subsidies,
+            number_of_unemployed_individuals=n_unemployed,
+            tax_data=synthetic_country.tax_data,
+            n_industries=n_industries,
+            consumer_tax=consumer_tax,
+        )
+
+        government_entities = GovernmentEntities.from_pickled_agent(
+            synthetic_government_entities=synthetic_country.government_entities,
+            configuration=country_configuration.government_entities,
+            country_name=country_name,
+            all_country_names=all_country_names,
+            n_industries=n_industries,
+            add_emissions=add_emissions,
+            emission_factors_lcu=emission_factors_lcu,
+            emitting_indices=emitting_indices,
+        )
+
+        banks = Banks.from_pickled_agent(
+            synthetic_banks=synthetic_country.banks,
+            configuration=country_configuration.banks,
+            policy_rate_markup=synthetic_country.policy_rate_markup,
+            country_name=country_name,
+            all_country_names=all_country_names,
+            n_industries=n_industries,
+            scale=scale,
+        )
+
+        central_bank = CentralBank.from_pickled_agent(
+            synthetic_central_bank=synthetic_country.central_bank,
+            configuration=country_configuration.central_bank,
+            country_name=country_name,
+            all_country_names=all_country_names,
+            n_industries=n_industries,
+        )
+
+        exogenous = Exogenous.from_pickled_agent(
+            synthetic_country=synthetic_country,
+            exchange_rates=exchange_rates,
+            country_name=country_name,
+            initial_year=initial_year,
+            t_max=t_max,
+        )
+
+        economy = Economy.from_agents(
+            country_name=country_name,
+            all_country_names=all_country_names,
+            economy_configuration=country_configuration.economy,
+            individuals=individuals,
+            firms=firms,
+            central_government=central_government,
+            government_entities=government_entities,
+            households=households,
+            industry_vectors=synthetic_country.industry_data["industry_vectors"],
+            exogenous=exogenous,
+        )
+
+        labour_market = LabourMarket.from_agents(
+            individuals=individuals,
+            labour_market_configuration=country_configuration.labour_market,
+            country_name=country_name,
+            n_industries=n_industries,
+        )
+
+        credit_market = CreditMarket.from_pickled_market(
+            synthetic_credit_market=synthetic_country.credit_market,
+            credit_market_configuration=country_configuration.credit_market,
+            country_name=country_name,
+        )
+
+        housing_market = HousingMarket.from_pickled_market(
+            synthetic_housing_market=synthetic_country.housing_market,
+            housing_market_configuration=country_configuration.housing_market,
+            country_name=country_name,
+            scale=scale,
+        )
+
         return cls(
             country_name=country_name,
             scale=scale,
@@ -542,6 +569,7 @@ class Country:
             emission_factors_lcu_ch4=emission_factors_lcu_ch4,
             emitting_indices_ch4=emitting_indices_ch4,
             personal_income_tax=personal_income_tax,
+            consumer_tax=consumer_tax,
             donation_augmentation=donation_augmentation,
         )
 
@@ -959,7 +987,7 @@ class Country:
                 per_capita_unemployment_benefits=self.central_government.ts.current(
                     "unemployment_benefits_by_individual"
                 )[0],
-                tau_vat=self.central_government.states["Value-added Tax"],
+                tau_vat=self.consumer_tax.rates,    #self.central_government.states["Value-added Tax"],
                 assume_zero_growth=self.assume_zero_growth,
                 prices=self.firms.ts.current("price"),
                 initial_prices=self.firms.ts.initial("price"),
@@ -1505,7 +1533,7 @@ class Country:
             readjusted_factors_ch4 = None
 
         self.households.update_consumption_and_investment(
-            tau_vat=self.central_government.states["Value-added Tax"],
+            tau_vat=self.consumer_tax.rates,    #self.central_government.states["Value-added Tax"],
             tau_cf=self.central_government.states["Capital Formation Tax"],
             readjusted_factors=readjusted_factors,
             emitting_indices=self.emitting_indices,
@@ -1602,6 +1630,7 @@ class Country:
             current_income_financial_assets=self.households.ts.current("income_financial_assets"),
             current_ind_activity=self.individuals.states["Activity Status"],
             current_ind_realised_cons=self.households.ts.current("consumption"),
+            current_ind_consumption_by_good=self.households.ts.current("consumption_by_good"),
             current_bank_profits=self.banks.ts.current("profits"),
             current_firm_production=self.firms.ts.current("production"),
             current_firm_price=self.firms.ts.current("price"),
@@ -1615,10 +1644,11 @@ class Country:
                 self.individuals.ts.current("personal_income_tax_paid")
                 + self.individuals.ts.current("personal_income_tax_adjustment")
             ),
+            consumer_tax=self.consumer_tax,
         )
 
         # General government fields
-        self.central_government.ts.taxes_on_products.append([self.central_government.compute_taxes_on_products()])
+        self.central_government.ts.taxes_on_products.append([self.central_government.compute_taxes_on_products(self.consumer_tax)])
         self.central_government.ts.revenue.append(
             [
                 self.central_government.compute_revenue(
@@ -1757,6 +1787,21 @@ class Country:
         # credit = credit_list[2]
         # print(f"{year} {self.country_name} personal_income_tax.nonrefundable_credits[{credit}].amount {self.personal_income_tax.nonrefundable_credits[credit].amount}")
 
+    def update_consumer_rates(self, year:int) -> None:
+        """Set consumer tax rates for a certain year.
+                    
+        Args:
+            year (int): Year
+        """
+
+        if self.consumer_tax.rates_timeseries is not None:
+            rates_timeseries_year = self.consumer_tax.rates_timeseries.loc[[year]] # pass index as list ensures dataframe (not a series) returned
+        else:
+            raise ValueError("self.consumer_tax.rates_timeseries is empty")
+
+        rates = rates_timeseries_year["rate"].values
+        self.consumer_tax.set_rates(rates)
+    
     def update_states_from_data(self, year:int) -> None:
         """Update individual states that rely on FIN data to the current timestep (even though the data is yearly)
             

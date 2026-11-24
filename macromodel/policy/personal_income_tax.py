@@ -755,9 +755,9 @@ class ProgressiveRate(PersonalIncomeTax):
                 Final threshold must be float('inf')
             scale (int): Scaling factor for population-based calculations
             increments_per_year (int): Timesteps per year
-            bracket_timeseries (pd.DataFrame): Bracket timeseries for use by country.update_brackets()
-            nonrefundable_credit_timeseries (pd.DataFrame): Nonrefundable credit timeseries for use by country.update_credits()
-            nonrefundable_credits (dict(PersonalIncomeTaxCredit)): Nonrefundable credit variables 
+            # bracket_timeseries (pd.DataFrame): Bracket timeseries for use by country.update_brackets()
+            # nonrefundable_credit_timeseries (pd.DataFrame): Nonrefundable credit timeseries for use by country.update_credits()
+            # nonrefundable_credits (dict(PersonalIncomeTaxCredit)): Nonrefundable credit variables 
         """
 
         self._validate_brackets(brackets)

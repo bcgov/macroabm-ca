@@ -1,0 +1,732 @@
+year,jurisdiction,Firm_ID,Industry,Industry_Name,rate
+2014,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2014,CAN_BC,1,B05a,Coal mining,0.14
+2014,CAN_BC,2,B05b,Natural gas extraction,0.14
+2014,CAN_BC,3,B05c,Petroleum crude,0.14
+2014,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2014,CAN_BC,5,B09,Mining support service activities,0.07
+2014,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2014,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2014,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2014,CAN_BC,9,C17,Paper products and printing,0.07
+2014,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2014,CAN_BC,11,C20,Chemical and chemical products,0.07
+2014,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2014,CAN_BC,13,C22,Rubber and plastics products,0.07
+2014,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2014,CAN_BC,15,C24a,Iron and steel,0.07
+2014,CAN_BC,16,C24b,Other basic metals,0.07
+2014,CAN_BC,17,C25,Fabricated metal products,0.07
+2014,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2014,CAN_BC,19,C27,Electrical equipment,0.07
+2014,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2014,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2014,CAN_BC,22,C30,Other transport equipment,0.07
+2014,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2014,CAN_BC,24,D,Electricity,0
+2014,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2014,CAN_BC,26,F,Construction,0.07
+2014,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2014,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2014,CAN_BC,29,H50,Water transport,0
+2014,CAN_BC,30,H51,Air transport,0
+2014,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2014,CAN_BC,32,H53,Postal and courier activities,0
+2014,CAN_BC,33,I,Accommodation and food service activities,0.05
+2014,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2014,CAN_BC,35,K,Financial and insurance activities,0
+2014,CAN_BC,36,L,Real estate activities,0
+2014,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2014,CAN_BC,38,N,Administrative and support services,0
+2014,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2014,CAN_BC,40,P,Education,0
+2014,CAN_BC,41,Q,Human health and social work activities,0
+2014,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2015,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2015,CAN_BC,1,B05a,Coal mining,0.14
+2015,CAN_BC,2,B05b,Natural gas extraction,0.14
+2015,CAN_BC,3,B05c,Petroleum crude,0.14
+2015,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2015,CAN_BC,5,B09,Mining support service activities,0.07
+2015,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2015,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2015,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2015,CAN_BC,9,C17,Paper products and printing,0.07
+2015,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2015,CAN_BC,11,C20,Chemical and chemical products,0.07
+2015,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2015,CAN_BC,13,C22,Rubber and plastics products,0.07
+2015,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2015,CAN_BC,15,C24a,Iron and steel,0.07
+2015,CAN_BC,16,C24b,Other basic metals,0.07
+2015,CAN_BC,17,C25,Fabricated metal products,0.07
+2015,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2015,CAN_BC,19,C27,Electrical equipment,0.07
+2015,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2015,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2015,CAN_BC,22,C30,Other transport equipment,0.07
+2015,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2015,CAN_BC,24,D,Electricity,0
+2015,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2015,CAN_BC,26,F,Construction,0.07
+2015,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2015,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2015,CAN_BC,29,H50,Water transport,0
+2015,CAN_BC,30,H51,Air transport,0
+2015,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2015,CAN_BC,32,H53,Postal and courier activities,0
+2015,CAN_BC,33,I,Accommodation and food service activities,0.05
+2015,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2015,CAN_BC,35,K,Financial and insurance activities,0
+2015,CAN_BC,36,L,Real estate activities,0
+2015,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2015,CAN_BC,38,N,Administrative and support services,0
+2015,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2015,CAN_BC,40,P,Education,0
+2015,CAN_BC,41,Q,Human health and social work activities,0
+2015,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2016,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2016,CAN_BC,1,B05a,Coal mining,0.14
+2016,CAN_BC,2,B05b,Natural gas extraction,0.14
+2016,CAN_BC,3,B05c,Petroleum crude,0.14
+2016,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2016,CAN_BC,5,B09,Mining support service activities,0.07
+2016,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2016,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2016,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2016,CAN_BC,9,C17,Paper products and printing,0.07
+2016,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2016,CAN_BC,11,C20,Chemical and chemical products,0.07
+2016,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2016,CAN_BC,13,C22,Rubber and plastics products,0.07
+2016,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2016,CAN_BC,15,C24a,Iron and steel,0.07
+2016,CAN_BC,16,C24b,Other basic metals,0.07
+2016,CAN_BC,17,C25,Fabricated metal products,0.07
+2016,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2016,CAN_BC,19,C27,Electrical equipment,0.07
+2016,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2016,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2016,CAN_BC,22,C30,Other transport equipment,0.07
+2016,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2016,CAN_BC,24,D,Electricity,0
+2016,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2016,CAN_BC,26,F,Construction,0.07
+2016,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2016,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2016,CAN_BC,29,H50,Water transport,0
+2016,CAN_BC,30,H51,Air transport,0
+2016,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2016,CAN_BC,32,H53,Postal and courier activities,0
+2016,CAN_BC,33,I,Accommodation and food service activities,0.05
+2016,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2016,CAN_BC,35,K,Financial and insurance activities,0
+2016,CAN_BC,36,L,Real estate activities,0
+2016,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2016,CAN_BC,38,N,Administrative and support services,0
+2016,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2016,CAN_BC,40,P,Education,0
+2016,CAN_BC,41,Q,Human health and social work activities,0
+2016,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2017,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2017,CAN_BC,1,B05a,Coal mining,0.14
+2017,CAN_BC,2,B05b,Natural gas extraction,0.14
+2017,CAN_BC,3,B05c,Petroleum crude,0.14
+2017,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2017,CAN_BC,5,B09,Mining support service activities,0.07
+2017,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2017,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2017,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2017,CAN_BC,9,C17,Paper products and printing,0.07
+2017,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2017,CAN_BC,11,C20,Chemical and chemical products,0.07
+2017,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2017,CAN_BC,13,C22,Rubber and plastics products,0.07
+2017,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2017,CAN_BC,15,C24a,Iron and steel,0.07
+2017,CAN_BC,16,C24b,Other basic metals,0.07
+2017,CAN_BC,17,C25,Fabricated metal products,0.07
+2017,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2017,CAN_BC,19,C27,Electrical equipment,0.07
+2017,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2017,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2017,CAN_BC,22,C30,Other transport equipment,0.07
+2017,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2017,CAN_BC,24,D,Electricity,0
+2017,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2017,CAN_BC,26,F,Construction,0.07
+2017,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2017,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2017,CAN_BC,29,H50,Water transport,0
+2017,CAN_BC,30,H51,Air transport,0
+2017,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2017,CAN_BC,32,H53,Postal and courier activities,0
+2017,CAN_BC,33,I,Accommodation and food service activities,0.05
+2017,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2017,CAN_BC,35,K,Financial and insurance activities,0
+2017,CAN_BC,36,L,Real estate activities,0
+2017,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2017,CAN_BC,38,N,Administrative and support services,0
+2017,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2017,CAN_BC,40,P,Education,0
+2017,CAN_BC,41,Q,Human health and social work activities,0
+2017,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2018,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2018,CAN_BC,1,B05a,Coal mining,0.14
+2018,CAN_BC,2,B05b,Natural gas extraction,0.14
+2018,CAN_BC,3,B05c,Petroleum crude,0.14
+2018,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2018,CAN_BC,5,B09,Mining support service activities,0.07
+2018,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2018,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2018,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2018,CAN_BC,9,C17,Paper products and printing,0.07
+2018,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2018,CAN_BC,11,C20,Chemical and chemical products,0.07
+2018,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2018,CAN_BC,13,C22,Rubber and plastics products,0.07
+2018,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2018,CAN_BC,15,C24a,Iron and steel,0.07
+2018,CAN_BC,16,C24b,Other basic metals,0.07
+2018,CAN_BC,17,C25,Fabricated metal products,0.07
+2018,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2018,CAN_BC,19,C27,Electrical equipment,0.07
+2018,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2018,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2018,CAN_BC,22,C30,Other transport equipment,0.07
+2018,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2018,CAN_BC,24,D,Electricity,0
+2018,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2018,CAN_BC,26,F,Construction,0.07
+2018,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2018,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2018,CAN_BC,29,H50,Water transport,0
+2018,CAN_BC,30,H51,Air transport,0
+2018,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2018,CAN_BC,32,H53,Postal and courier activities,0
+2018,CAN_BC,33,I,Accommodation and food service activities,0.05
+2018,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2018,CAN_BC,35,K,Financial and insurance activities,0
+2018,CAN_BC,36,L,Real estate activities,0
+2018,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2018,CAN_BC,38,N,Administrative and support services,0
+2018,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2018,CAN_BC,40,P,Education,0
+2018,CAN_BC,41,Q,Human health and social work activities,0
+2018,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2019,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2019,CAN_BC,1,B05a,Coal mining,0.14
+2019,CAN_BC,2,B05b,Natural gas extraction,0.14
+2019,CAN_BC,3,B05c,Petroleum crude,0.14
+2019,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2019,CAN_BC,5,B09,Mining support service activities,0.07
+2019,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2019,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2019,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2019,CAN_BC,9,C17,Paper products and printing,0.07
+2019,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2019,CAN_BC,11,C20,Chemical and chemical products,0.07
+2019,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2019,CAN_BC,13,C22,Rubber and plastics products,0.07
+2019,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2019,CAN_BC,15,C24a,Iron and steel,0.07
+2019,CAN_BC,16,C24b,Other basic metals,0.07
+2019,CAN_BC,17,C25,Fabricated metal products,0.07
+2019,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2019,CAN_BC,19,C27,Electrical equipment,0.07
+2019,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2019,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2019,CAN_BC,22,C30,Other transport equipment,0.07
+2019,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2019,CAN_BC,24,D,Electricity,0
+2019,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2019,CAN_BC,26,F,Construction,0.07
+2019,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2019,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2019,CAN_BC,29,H50,Water transport,0
+2019,CAN_BC,30,H51,Air transport,0
+2019,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2019,CAN_BC,32,H53,Postal and courier activities,0
+2019,CAN_BC,33,I,Accommodation and food service activities,0.05
+2019,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2019,CAN_BC,35,K,Financial and insurance activities,0
+2019,CAN_BC,36,L,Real estate activities,0
+2019,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2019,CAN_BC,38,N,Administrative and support services,0
+2019,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2019,CAN_BC,40,P,Education,0
+2019,CAN_BC,41,Q,Human health and social work activities,0
+2019,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2020,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2020,CAN_BC,1,B05a,Coal mining,0.14
+2020,CAN_BC,2,B05b,Natural gas extraction,0.14
+2020,CAN_BC,3,B05c,Petroleum crude,0.14
+2020,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2020,CAN_BC,5,B09,Mining support service activities,0.07
+2020,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2020,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2020,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2020,CAN_BC,9,C17,Paper products and printing,0.07
+2020,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2020,CAN_BC,11,C20,Chemical and chemical products,0.07
+2020,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2020,CAN_BC,13,C22,Rubber and plastics products,0.07
+2020,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2020,CAN_BC,15,C24a,Iron and steel,0.07
+2020,CAN_BC,16,C24b,Other basic metals,0.07
+2020,CAN_BC,17,C25,Fabricated metal products,0.07
+2020,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2020,CAN_BC,19,C27,Electrical equipment,0.07
+2020,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2020,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2020,CAN_BC,22,C30,Other transport equipment,0.07
+2020,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2020,CAN_BC,24,D,Electricity,0
+2020,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2020,CAN_BC,26,F,Construction,0.07
+2020,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2020,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2020,CAN_BC,29,H50,Water transport,0
+2020,CAN_BC,30,H51,Air transport,0
+2020,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2020,CAN_BC,32,H53,Postal and courier activities,0
+2020,CAN_BC,33,I,Accommodation and food service activities,0.05
+2020,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2020,CAN_BC,35,K,Financial and insurance activities,0
+2020,CAN_BC,36,L,Real estate activities,0
+2020,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2020,CAN_BC,38,N,Administrative and support services,0
+2020,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2020,CAN_BC,40,P,Education,0
+2020,CAN_BC,41,Q,Human health and social work activities,0
+2020,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2021,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2021,CAN_BC,1,B05a,Coal mining,0.14
+2021,CAN_BC,2,B05b,Natural gas extraction,0.14
+2021,CAN_BC,3,B05c,Petroleum crude,0.14
+2021,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2021,CAN_BC,5,B09,Mining support service activities,0.07
+2021,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2021,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2021,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2021,CAN_BC,9,C17,Paper products and printing,0.07
+2021,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2021,CAN_BC,11,C20,Chemical and chemical products,0.07
+2021,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2021,CAN_BC,13,C22,Rubber and plastics products,0.07
+2021,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2021,CAN_BC,15,C24a,Iron and steel,0.07
+2021,CAN_BC,16,C24b,Other basic metals,0.07
+2021,CAN_BC,17,C25,Fabricated metal products,0.07
+2021,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2021,CAN_BC,19,C27,Electrical equipment,0.07
+2021,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2021,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2021,CAN_BC,22,C30,Other transport equipment,0.07
+2021,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2021,CAN_BC,24,D,Electricity,0
+2021,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2021,CAN_BC,26,F,Construction,0.07
+2021,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2021,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2021,CAN_BC,29,H50,Water transport,0
+2021,CAN_BC,30,H51,Air transport,0
+2021,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2021,CAN_BC,32,H53,Postal and courier activities,0
+2021,CAN_BC,33,I,Accommodation and food service activities,0.05
+2021,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2021,CAN_BC,35,K,Financial and insurance activities,0
+2021,CAN_BC,36,L,Real estate activities,0
+2021,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2021,CAN_BC,38,N,Administrative and support services,0
+2021,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2021,CAN_BC,40,P,Education,0
+2021,CAN_BC,41,Q,Human health and social work activities,0
+2021,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2022,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2022,CAN_BC,1,B05a,Coal mining,0.14
+2022,CAN_BC,2,B05b,Natural gas extraction,0.14
+2022,CAN_BC,3,B05c,Petroleum crude,0.14
+2022,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2022,CAN_BC,5,B09,Mining support service activities,0.07
+2022,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2022,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2022,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2022,CAN_BC,9,C17,Paper products and printing,0.07
+2022,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2022,CAN_BC,11,C20,Chemical and chemical products,0.07
+2022,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2022,CAN_BC,13,C22,Rubber and plastics products,0.07
+2022,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2022,CAN_BC,15,C24a,Iron and steel,0.07
+2022,CAN_BC,16,C24b,Other basic metals,0.07
+2022,CAN_BC,17,C25,Fabricated metal products,0.07
+2022,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2022,CAN_BC,19,C27,Electrical equipment,0.07
+2022,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2022,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2022,CAN_BC,22,C30,Other transport equipment,0.07
+2022,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2022,CAN_BC,24,D,Electricity,0
+2022,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2022,CAN_BC,26,F,Construction,0.07
+2022,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2022,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2022,CAN_BC,29,H50,Water transport,0
+2022,CAN_BC,30,H51,Air transport,0
+2022,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2022,CAN_BC,32,H53,Postal and courier activities,0
+2022,CAN_BC,33,I,Accommodation and food service activities,0.05
+2022,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2022,CAN_BC,35,K,Financial and insurance activities,0
+2022,CAN_BC,36,L,Real estate activities,0
+2022,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2022,CAN_BC,38,N,Administrative and support services,0
+2022,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2022,CAN_BC,40,P,Education,0
+2022,CAN_BC,41,Q,Human health and social work activities,0
+2022,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2023,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2023,CAN_BC,1,B05a,Coal mining,0.14
+2023,CAN_BC,2,B05b,Natural gas extraction,0.14
+2023,CAN_BC,3,B05c,Petroleum crude,0.14
+2023,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2023,CAN_BC,5,B09,Mining support service activities,0.07
+2023,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2023,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2023,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2023,CAN_BC,9,C17,Paper products and printing,0.07
+2023,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2023,CAN_BC,11,C20,Chemical and chemical products,0.07
+2023,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2023,CAN_BC,13,C22,Rubber and plastics products,0.07
+2023,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2023,CAN_BC,15,C24a,Iron and steel,0.07
+2023,CAN_BC,16,C24b,Other basic metals,0.07
+2023,CAN_BC,17,C25,Fabricated metal products,0.07
+2023,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2023,CAN_BC,19,C27,Electrical equipment,0.07
+2023,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2023,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2023,CAN_BC,22,C30,Other transport equipment,0.07
+2023,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2023,CAN_BC,24,D,Electricity,0
+2023,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2023,CAN_BC,26,F,Construction,0.07
+2023,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2023,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2023,CAN_BC,29,H50,Water transport,0
+2023,CAN_BC,30,H51,Air transport,0
+2023,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2023,CAN_BC,32,H53,Postal and courier activities,0
+2023,CAN_BC,33,I,Accommodation and food service activities,0.05
+2023,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2023,CAN_BC,35,K,Financial and insurance activities,0
+2023,CAN_BC,36,L,Real estate activities,0
+2023,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2023,CAN_BC,38,N,Administrative and support services,0
+2023,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2023,CAN_BC,40,P,Education,0
+2023,CAN_BC,41,Q,Human health and social work activities,0
+2023,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2024,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2024,CAN_BC,1,B05a,Coal mining,0.14
+2024,CAN_BC,2,B05b,Natural gas extraction,0.14
+2024,CAN_BC,3,B05c,Petroleum crude,0.14
+2024,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2024,CAN_BC,5,B09,Mining support service activities,0.07
+2024,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2024,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2024,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2024,CAN_BC,9,C17,Paper products and printing,0.07
+2024,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2024,CAN_BC,11,C20,Chemical and chemical products,0.07
+2024,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2024,CAN_BC,13,C22,Rubber and plastics products,0.07
+2024,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2024,CAN_BC,15,C24a,Iron and steel,0.07
+2024,CAN_BC,16,C24b,Other basic metals,0.07
+2024,CAN_BC,17,C25,Fabricated metal products,0.07
+2024,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2024,CAN_BC,19,C27,Electrical equipment,0.07
+2024,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2024,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2024,CAN_BC,22,C30,Other transport equipment,0.07
+2024,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2024,CAN_BC,24,D,Electricity,0
+2024,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2024,CAN_BC,26,F,Construction,0.07
+2024,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2024,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2024,CAN_BC,29,H50,Water transport,0
+2024,CAN_BC,30,H51,Air transport,0
+2024,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2024,CAN_BC,32,H53,Postal and courier activities,0
+2024,CAN_BC,33,I,Accommodation and food service activities,0.05
+2024,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2024,CAN_BC,35,K,Financial and insurance activities,0
+2024,CAN_BC,36,L,Real estate activities,0
+2024,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2024,CAN_BC,38,N,Administrative and support services,0
+2024,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2024,CAN_BC,40,P,Education,0
+2024,CAN_BC,41,Q,Human health and social work activities,0
+2024,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2025,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2025,CAN_BC,1,B05a,Coal mining,0.14
+2025,CAN_BC,2,B05b,Natural gas extraction,0.14
+2025,CAN_BC,3,B05c,Petroleum crude,0.14
+2025,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2025,CAN_BC,5,B09,Mining support service activities,0.07
+2025,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2025,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2025,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2025,CAN_BC,9,C17,Paper products and printing,0.07
+2025,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2025,CAN_BC,11,C20,Chemical and chemical products,0.07
+2025,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2025,CAN_BC,13,C22,Rubber and plastics products,0.07
+2025,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2025,CAN_BC,15,C24a,Iron and steel,0.07
+2025,CAN_BC,16,C24b,Other basic metals,0.07
+2025,CAN_BC,17,C25,Fabricated metal products,0.07
+2025,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2025,CAN_BC,19,C27,Electrical equipment,0.07
+2025,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2025,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2025,CAN_BC,22,C30,Other transport equipment,0.07
+2025,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2025,CAN_BC,24,D,Electricity,0
+2025,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2025,CAN_BC,26,F,Construction,0.07
+2025,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2025,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2025,CAN_BC,29,H50,Water transport,0
+2025,CAN_BC,30,H51,Air transport,0
+2025,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2025,CAN_BC,32,H53,Postal and courier activities,0
+2025,CAN_BC,33,I,Accommodation and food service activities,0.05
+2025,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2025,CAN_BC,35,K,Financial and insurance activities,0
+2025,CAN_BC,36,L,Real estate activities,0
+2025,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2025,CAN_BC,38,N,Administrative and support services,0
+2025,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2025,CAN_BC,40,P,Education,0
+2025,CAN_BC,41,Q,Human health and social work activities,0
+2025,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2026,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2026,CAN_BC,1,B05a,Coal mining,0.14
+2026,CAN_BC,2,B05b,Natural gas extraction,0.14
+2026,CAN_BC,3,B05c,Petroleum crude,0.14
+2026,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2026,CAN_BC,5,B09,Mining support service activities,0.07
+2026,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2026,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2026,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2026,CAN_BC,9,C17,Paper products and printing,0.07
+2026,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2026,CAN_BC,11,C20,Chemical and chemical products,0.07
+2026,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2026,CAN_BC,13,C22,Rubber and plastics products,0.07
+2026,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2026,CAN_BC,15,C24a,Iron and steel,0.07
+2026,CAN_BC,16,C24b,Other basic metals,0.07
+2026,CAN_BC,17,C25,Fabricated metal products,0.07
+2026,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2026,CAN_BC,19,C27,Electrical equipment,0.07
+2026,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2026,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2026,CAN_BC,22,C30,Other transport equipment,0.07
+2026,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2026,CAN_BC,24,D,Electricity,0
+2026,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2026,CAN_BC,26,F,Construction,0.07
+2026,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2026,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2026,CAN_BC,29,H50,Water transport,0
+2026,CAN_BC,30,H51,Air transport,0
+2026,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2026,CAN_BC,32,H53,Postal and courier activities,0
+2026,CAN_BC,33,I,Accommodation and food service activities,0.05
+2026,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2026,CAN_BC,35,K,Financial and insurance activities,0
+2026,CAN_BC,36,L,Real estate activities,0
+2026,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2026,CAN_BC,38,N,Administrative and support services,0
+2026,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2026,CAN_BC,40,P,Education,0
+2026,CAN_BC,41,Q,Human health and social work activities,0
+2026,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2027,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2027,CAN_BC,1,B05a,Coal mining,0.14
+2027,CAN_BC,2,B05b,Natural gas extraction,0.14
+2027,CAN_BC,3,B05c,Petroleum crude,0.14
+2027,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2027,CAN_BC,5,B09,Mining support service activities,0.07
+2027,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2027,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2027,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2027,CAN_BC,9,C17,Paper products and printing,0.07
+2027,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2027,CAN_BC,11,C20,Chemical and chemical products,0.07
+2027,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2027,CAN_BC,13,C22,Rubber and plastics products,0.07
+2027,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2027,CAN_BC,15,C24a,Iron and steel,0.07
+2027,CAN_BC,16,C24b,Other basic metals,0.07
+2027,CAN_BC,17,C25,Fabricated metal products,0.07
+2027,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2027,CAN_BC,19,C27,Electrical equipment,0.07
+2027,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2027,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2027,CAN_BC,22,C30,Other transport equipment,0.07
+2027,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2027,CAN_BC,24,D,Electricity,0
+2027,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2027,CAN_BC,26,F,Construction,0.07
+2027,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2027,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2027,CAN_BC,29,H50,Water transport,0
+2027,CAN_BC,30,H51,Air transport,0
+2027,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2027,CAN_BC,32,H53,Postal and courier activities,0
+2027,CAN_BC,33,I,Accommodation and food service activities,0.05
+2027,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2027,CAN_BC,35,K,Financial and insurance activities,0
+2027,CAN_BC,36,L,Real estate activities,0
+2027,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2027,CAN_BC,38,N,Administrative and support services,0
+2027,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2027,CAN_BC,40,P,Education,0
+2027,CAN_BC,41,Q,Human health and social work activities,0
+2027,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2028,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2028,CAN_BC,1,B05a,Coal mining,0.14
+2028,CAN_BC,2,B05b,Natural gas extraction,0.14
+2028,CAN_BC,3,B05c,Petroleum crude,0.14
+2028,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2028,CAN_BC,5,B09,Mining support service activities,0.07
+2028,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2028,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2028,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2028,CAN_BC,9,C17,Paper products and printing,0.07
+2028,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2028,CAN_BC,11,C20,Chemical and chemical products,0.07
+2028,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2028,CAN_BC,13,C22,Rubber and plastics products,0.07
+2028,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2028,CAN_BC,15,C24a,Iron and steel,0.07
+2028,CAN_BC,16,C24b,Other basic metals,0.07
+2028,CAN_BC,17,C25,Fabricated metal products,0.07
+2028,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2028,CAN_BC,19,C27,Electrical equipment,0.07
+2028,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2028,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2028,CAN_BC,22,C30,Other transport equipment,0.07
+2028,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2028,CAN_BC,24,D,Electricity,0
+2028,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2028,CAN_BC,26,F,Construction,0.07
+2028,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2028,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2028,CAN_BC,29,H50,Water transport,0
+2028,CAN_BC,30,H51,Air transport,0
+2028,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2028,CAN_BC,32,H53,Postal and courier activities,0
+2028,CAN_BC,33,I,Accommodation and food service activities,0.05
+2028,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2028,CAN_BC,35,K,Financial and insurance activities,0
+2028,CAN_BC,36,L,Real estate activities,0
+2028,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2028,CAN_BC,38,N,Administrative and support services,0
+2028,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2028,CAN_BC,40,P,Education,0
+2028,CAN_BC,41,Q,Human health and social work activities,0
+2028,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2029,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2029,CAN_BC,1,B05a,Coal mining,0.14
+2029,CAN_BC,2,B05b,Natural gas extraction,0.14
+2029,CAN_BC,3,B05c,Petroleum crude,0.14
+2029,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2029,CAN_BC,5,B09,Mining support service activities,0.07
+2029,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2029,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2029,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2029,CAN_BC,9,C17,Paper products and printing,0.07
+2029,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2029,CAN_BC,11,C20,Chemical and chemical products,0.07
+2029,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2029,CAN_BC,13,C22,Rubber and plastics products,0.07
+2029,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2029,CAN_BC,15,C24a,Iron and steel,0.07
+2029,CAN_BC,16,C24b,Other basic metals,0.07
+2029,CAN_BC,17,C25,Fabricated metal products,0.07
+2029,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2029,CAN_BC,19,C27,Electrical equipment,0.07
+2029,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2029,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2029,CAN_BC,22,C30,Other transport equipment,0.07
+2029,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2029,CAN_BC,24,D,Electricity,0
+2029,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2029,CAN_BC,26,F,Construction,0.07
+2029,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2029,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2029,CAN_BC,29,H50,Water transport,0
+2029,CAN_BC,30,H51,Air transport,0
+2029,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2029,CAN_BC,32,H53,Postal and courier activities,0
+2029,CAN_BC,33,I,Accommodation and food service activities,0.05
+2029,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2029,CAN_BC,35,K,Financial and insurance activities,0
+2029,CAN_BC,36,L,Real estate activities,0
+2029,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2029,CAN_BC,38,N,Administrative and support services,0
+2029,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2029,CAN_BC,40,P,Education,0
+2029,CAN_BC,41,Q,Human health and social work activities,0
+2029,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07
+2030,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
+2030,CAN_BC,1,B05a,Coal mining,0.14
+2030,CAN_BC,2,B05b,Natural gas extraction,0.14
+2030,CAN_BC,3,B05c,Petroleum crude,0.14
+2030,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
+2030,CAN_BC,5,B09,Mining support service activities,0.07
+2030,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05
+2030,CAN_BC,7,C13T15,"Textiles, textile products, leather and footwear",0.07
+2030,CAN_BC,8,C16,Wood and products of wood and cork,0.07
+2030,CAN_BC,9,C17,Paper products and printing,0.07
+2030,CAN_BC,10,C19,Coke and refined petroleum products,0.07
+2030,CAN_BC,11,C20,Chemical and chemical products,0.07
+2030,CAN_BC,12,C21,"Pharmaceuticals, medicinal chemical and botanical products",0.07
+2030,CAN_BC,13,C22,Rubber and plastics products,0.07
+2030,CAN_BC,14,C23,Other non-metallic mineral products,0.07
+2030,CAN_BC,15,C24a,Iron and steel,0.07
+2030,CAN_BC,16,C24b,Other basic metals,0.07
+2030,CAN_BC,17,C25,Fabricated metal products,0.07
+2030,CAN_BC,18,C26,"Computer, electronic and optical equipment",0.07
+2030,CAN_BC,19,C27,Electrical equipment,0.07
+2030,CAN_BC,20,C28,"Machinery and equipment, nec ",0.07
+2030,CAN_BC,21,C29,"Motor vehicles, trailers and semi-trailers",0.07
+2030,CAN_BC,22,C30,Other transport equipment,0.07
+2030,CAN_BC,23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,0.07
+2030,CAN_BC,24,D,Electricity,0
+2030,CAN_BC,25,E,"Water supply; sewerage, waste management and remediation activities",0
+2030,CAN_BC,26,F,Construction,0.07
+2030,CAN_BC,27,G,Wholesale and retail trade; repair of motor vehicles,0.07
+2030,CAN_BC,28,H49,Land transport and transport via pipelines,0
+2030,CAN_BC,29,H50,Water transport,0
+2030,CAN_BC,30,H51,Air transport,0
+2030,CAN_BC,31,H52,Warehousing and support activities for transportation,0
+2030,CAN_BC,32,H53,Postal and courier activities,0
+2030,CAN_BC,33,I,Accommodation and food service activities,0.05
+2030,CAN_BC,34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",0.07
+2030,CAN_BC,35,K,Financial and insurance activities,0
+2030,CAN_BC,36,L,Real estate activities,0
+2030,CAN_BC,37,M,"Professional, scientific and technical activities",0
+2030,CAN_BC,38,N,Administrative and support services,0
+2030,CAN_BC,39,O,Public administration and defence; compulsory social security,0
+2030,CAN_BC,40,P,Education,0
+2030,CAN_BC,41,Q,Human health and social work activities,0
+2030,CAN_BC,42,R_S,"Arts, entertainment, recreation and other",0.07

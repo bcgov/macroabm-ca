@@ -39,6 +39,8 @@ from macromodel.util.function_mapping import functions_from_model, update_functi
 from macromodel.util.get_histogram import get_histogram
 from macromodel.util.property_mapping import map_to_enum
 
+from macromodel.policy.consumer_tax import ConsumerTax
+
 
 class Households(Agent):
     """Economic agent representing household sector behavior.
@@ -156,6 +158,7 @@ class Households(Agent):
         scale: int,
         add_emissions: bool = False,
         emission_fractions: Optional[EmissionFractions] = None,
+        consumer_tax: Optional[ConsumerTax] = None,
     ) -> "Households":
         """Create household agent from synthetic data.
 
@@ -177,6 +180,7 @@ class Households(Agent):
             scale (int): Scaling factor for histograms
             add_emissions (bool): Whether to track emissions
             emission_fractions (Optional[EmissionFractions]): Per-industry emission fraction multipliers
+            consumer_tax (Optional[ConsumerTax]): Consumer tax policy
 
         Returns:
             Households: Initialized household agent
@@ -253,9 +257,13 @@ class Households(Agent):
             columns=pd.Index(synthetic_country.industries, name="Industry"),
         )
 
-        tau_vat = synthetic_country.tax_data.value_added_tax
-
-        consumption_by_industry_hh = 1 / (1 + tau_vat) * synthetic_population.industry_consumption_before_vat
+        if consumer_tax is None:
+            tau_vat = synthetic_country.tax_data.value_added_tax
+            consumption_by_industry_hh =  1 / (1 + tau_vat) * synthetic_population.industry_consumption_before_vat
+        else:
+            tau_vat = consumer_tax.rates
+            vat_factor = [1.0/(1.0 + x) for x in tau_vat]
+            consumption_by_industry_hh = np.multiply(vat_factor, synthetic_population.industry_consumption_before_vat)
 
         if add_emissions:
             consumption_emissions = synthetic_population.household_data["Consumption Emissions"].values
@@ -626,7 +634,7 @@ class Households(Agent):
         initial_cpi: float,
         exogenous_total_consumption: float,
         per_capita_unemployment_benefits: float,
-        tau_vat: float,
+        tau_vat: np.ndarray,
         assume_zero_growth: bool,
         prices: Optional[np.ndarray] = None,
         initial_prices: Optional[np.ndarray] = None,
@@ -649,7 +657,7 @@ class Households(Agent):
             initial_cpi (float): Initial price index
             exogenous_total_consumption (float): External consumption target
             per_capita_unemployment_benefits (float): Per person benefits
-            tau_vat (float): Value added tax rate
+            tau_vat (np.ndarray): Value added tax rates
             assume_zero_growth (bool): Whether to assume no growth
             prices (Optional[np.ndarray]): Current prices by industry for CES substitution
             initial_prices (Optional[np.ndarray]): Initial prices by industry for CES substitution
@@ -1083,7 +1091,7 @@ class Households(Agent):
 
     def update_consumption_and_investment(
         self,
-        tau_vat: float,
+        tau_vat: np.ndarray,
         tau_cf: float,
         add_emissions: bool = False,
         readjusted_factors: Optional[np.ndarray] = None,
@@ -1101,7 +1109,7 @@ class Households(Agent):
         - Emissions data
 
         Args:
-            tau_vat (float): Value added tax rate
+            tau_vat (np.ndarray): Value added tax rate
             tau_cf (float): Capital formation tax rate
             add_emissions (bool): Whether to track emissions
             readjusted_factors (Optional[np.ndarray]): CO2 emission factors
@@ -1110,6 +1118,9 @@ class Households(Agent):
             emitting_indices_ch4 (Optional[np.ndarray]): CH4 emitting sector indices
             use_emission_multiplier (bool): Whether to apply industry-specific fraction multipliers
         """
+
+        debug = False
+
         # Total amount spent
         self.ts.amount_bought.append(self.ts.current("nominal_amount_spent_in_lcu").sum(axis=1))
 
@@ -1118,6 +1129,7 @@ class Households(Agent):
             self.ts.current("nominal_amount_spent_in_lcu"),
             self.ts.current("target_consumption"),
         )
+        self.ts.consumption_by_good.append(consumption_by_good)
 
         if add_emissions:
             # Apply per-industry consumption fraction multipliers when enabled.
@@ -1163,26 +1175,29 @@ class Households(Agent):
             self.ts.gas_consumption_emissions.append(disaggregated_emissions[:, 2])
             self.ts.refined_products_consumption_emissions.append(disaggregated_emissions[:, 3])
 
-        # Consumption
-        tau_vat_vector = np.zeros(np.shape(consumption_by_good)[1])
-        tau_vat_vector.fill(tau_vat)
+        if debug:
+            tau_vat_scalar = 0.02
+            tau_vat_vector = np.zeros(np.shape(consumption_by_good)[1])
+            tau_vat_vector.fill(tau_vat_scalar)
 
-        # Method 1: Uses a vector tau_vat_vector 
-        consumption_by_good_mod = np.multiply((1.0 + tau_vat_vector), consumption_by_good)
-        consumption_mod = consumption_by_good_mod.sum(axis=1)
-        total_consumption_mod = consumption_mod.sum()
+            # Method 1: Uses a vector tau_vat_vector 
+            consumption_by_good_vector = np.multiply((1.0 + tau_vat_vector), consumption_by_good)
+            consumption_vector = consumption_by_good_vector.sum(axis=1)
+            total_consumption_vector = consumption_vector.sum()
 
-        # Method 2: Original
-        consumption = consumption_by_good.sum(axis=1)
-        total_consumption = (1 + tau_vat) * consumption.sum()
+            # Method 2: Original
+            consumption_scalar = consumption_by_good.sum(axis=1)
+            total_consumption_scalar = (1 + tau_vat_scalar) * consumption_scalar.sum()
 
-        if total_consumption_mod == total_consumption:
-            print("success both methods are equivalent!")
+            if total_consumption_vector == total_consumption_scalar:
+                print("Success both methods are equivalent!")
 
-        self.ts.consumption.append(consumption_by_good.sum(axis=1))
-        self.ts.total_consumption.append([(1 + tau_vat) * self.ts.current("consumption").sum()])
-        self.ts.total_consumption_before_vat.append([self.ts.current("consumption").sum()])
-        self.ts.industry_consumption.append(consumption_by_good.sum(axis=0))
+        consumption_by_good_taxed = np.multiply((1.0 + tau_vat), consumption_by_good)
+        self.ts.consumption.append(consumption_by_good_taxed.sum(axis=1))
+        self.ts.total_consumption.append([self.ts.current("consumption").sum()])
+        hh_consumption_before_vat = consumption_by_good.sum(axis=1)
+        self.ts.total_consumption_before_vat.append([hh_consumption_before_vat.sum()])
+        self.ts.industry_consumption.append(consumption_by_good.sum(axis=0))        # TODO: update to consumption_by_good_modified if firms apply PST
 
         # Investment
         self.ts.investment.append(self.ts.current("nominal_amount_spent_in_lcu") - consumption_by_good)

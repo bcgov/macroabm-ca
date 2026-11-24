@@ -116,6 +116,7 @@ from macro_data.readers.taxation.personal_income_tax.personal_income_tax_reader 
     PersonalIncomeTaxBracketsData,
     PersonalIncomeTaxNonrefundableCreditsData,
 )
+from macro_data.readers.taxation.consumer_tax.consumer_tax_reader import ConsumerTaxData
 from macro_data.readers.fin_data.donations.donation_reader import DonationData
 
 
@@ -182,6 +183,7 @@ class SyntheticCountry:
     historical_emissions_df: Optional[pd.DataFrame] = None
     personal_income_tax_brackets: Optional[PersonalIncomeTaxBracketsData] = None
     personal_income_tax_nonrefundable_credits: Optional[PersonalIncomeTaxNonrefundableCreditsData] = None
+    consumer_tax_rates: Optional[ConsumerTaxData] = None
     donations: Optional[DonationData] = None 
 
     @classmethod
@@ -370,6 +372,11 @@ class SyntheticCountry:
         else:
             personal_income_tax_nonrefundable_credits = None
 
+        if readers.consumer_tax_rates is not None:
+            consumer_tax_rates = ConsumerTaxData.from_reader(readers.consumer_tax_rates)
+        else:
+            consumer_tax_rates = None
+
         if readers.donations is not None:
             donations = DonationData.from_reader(readers.donations)
         else:
@@ -405,6 +412,7 @@ class SyntheticCountry:
             ),
             personal_income_tax_brackets=personal_income_tax_brackets,
             personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
+            consumer_tax_rates=consumer_tax_rates,
             donations=donations,
         )
 
@@ -606,6 +614,11 @@ class SyntheticCountry:
         else:
             personal_income_tax_nonrefundable_credits = None
 
+        if readers.consumer_tax_rates is not None:
+            consumer_tax_rates = ConsumerTaxData.from_reader(readers.consumer_tax_rates)
+        else:
+            consumer_tax_rates = None
+
         if readers.donations is not None:
             donations = DonationData.from_reader(readers.donations)
         else:
@@ -641,6 +654,7 @@ class SyntheticCountry:
             ),
             personal_income_tax_brackets=personal_income_tax_brackets,
             personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
+            consumer_tax_rates=consumer_tax_rates,
             donations=donations,
         )
 

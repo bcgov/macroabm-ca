@@ -96,6 +96,8 @@ def create_households_timeseries(
         target_consumption=initial_hh_consumption,
         amount_bought=np.full(len(data), np.nan),
         consumption=data["Consumption"].values,
+        consumption_by_good=initial_hh_consumption,     # NOTE: self.ts.current("nominal_amount_spent_in_lcu") hasn't been computed yet 
+                                                        # (see update_consumption_and_investment() line 1128)
         total_consumption=[(1 + vat) * initial_consumption_by_industry.sum()],
         total_consumption_before_vat=[initial_consumption_by_industry.sum()],
         industry_consumption=initial_consumption_by_industry,

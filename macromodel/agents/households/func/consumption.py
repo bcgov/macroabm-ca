@@ -64,7 +64,7 @@ class HouseholdConsumption(ABC):
         exogenous_total_consumption: np.ndarray,
         current_time: int,
         take_consumption_weights_by_income_quantile: bool,
-        tau_vat: float, #np.ndarray,
+        tau_vat: np.ndarray,
     ) -> np.ndarray:
         """Calculate target consumption levels.
 
@@ -114,7 +114,7 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
         exogenous_total_consumption: np.ndarray,
         current_time: int,
         take_consumption_weights_by_income_quantile: bool,
-        tau_vat: float,#np.ndarray,
+        tau_vat: np.ndarray,
         prices: np.ndarray = None,  # Ignored in default consumption
         initial_prices: np.ndarray = None,  # Ignored in default consumption
         taxes: np.ndarray = None,  # Ignored in default consumption
@@ -143,7 +143,7 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
             exogenous_total_consumption (np.ndarray): External consumption target
             current_time (int): Current period
             take_consumption_weights_by_income_quantile (bool): Use income quintiles
-            tau_vat (float): Value added tax rate
+            tau_vat (np.ndarray): Value added tax rate
 
         Returns:
             np.ndarray: Target consumption by household and industry
@@ -189,7 +189,7 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
         consumption_weights: np.ndarray,
         consumption_weights_by_income: np.ndarray,  # noqa
         take_consumption_weights_by_income_quantile: bool,
-        tau_vat: float, #np.ndarray,
+        tau_vat: np.ndarray,
         consumption_smoothing_window: int,
         consumption_smoothing_fraction: float,
         minimum_consumption_fraction: float,
@@ -220,19 +220,10 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
         """
         debug = False
 
-        tau_vat_vector = np.zeros(len(consumption_weights))
-        tau_vat_vector.fill(tau_vat)
-        # delta = tau_vat
-        # for i in range(len(tau_vat_vector)):
-        #     tau_vat_vector[i] = tau_vat_vector[i] + np.random.uniform(-delta*0.25, delta*0.25)
-        if debug:
-            print(f"tau_vat {tau_vat}")
-            print(f"tau_vat_vector {tau_vat_vector}")
-
         smoothing_window = min(consumption_smoothing_window, len(historic_consumption_sum))
 
-        # Method 1: Uses a vector tau_vat_vector 
-        vat_factor = 1.0/(1.0 + tau_vat_vector[None, :])
+        # Method 1: Uses a vector tau_vat_vector
+        vat_factor = 1.0/(1.0 + tau_vat[None, :])
         minimum_budget = minimum_consumption_fraction * (1 - saving_rates) * household_benefits
         income_budget = (1 - saving_rates) * income
         historical_budget = (
@@ -250,17 +241,40 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
         )
 
         if debug:
+            # NOTE: under the condition below, method 1 and 2b should be equal
+            tau_vat_scalar = 0.02
+            tau_vat_vector = np.zeros(len(consumption_weights))
+            tau_vat_vector.fill(tau_vat_scalar)
+
+            # Method 1: Uses a vector tau_vat_vector 
+            vat_factor = 1.0/(1.0 + tau_vat_vector[None, :]) 
+            minimum_budget = minimum_consumption_fraction * (1 - saving_rates) * household_benefits
+            income_budget = (1 - saving_rates) * income
+            historical_budget = (
+                consumption_smoothing_fraction
+                * (1 / smoothing_window)
+                * historic_consumption_sum[1:][-smoothing_window:].sum(axis=0)
+            )
+    
+            target_consumption_vector = np.maximum(
+                np.maximum(
+                    np.outer(consumption_weights, minimum_budget).T * vat_factor,
+                    np.outer(consumption_weights, income_budget).T * vat_factor,
+                ),
+                np.outer(consumption_weights, historical_budget).T * vat_factor,
+            )
+
             # Method 2a: Original
-            target_consumption_scalar = (
+            target_consumption_scalar_2a = (
                 1.0
-                / (1 + tau_vat)
+                / (1 + tau_vat_scalar)
                 * np.outer(
                     consumption_weights,
                     np.maximum(
                         minimum_consumption_fraction * (1 - saving_rates) * household_benefits,
                         (1 - saving_rates) * income,
                         consumption_smoothing_fraction
-                        * (1 + tau_vat)
+                        * (1 + tau_vat_scalar)
                         * (1 / smoothing_window)
                         * historic_consumption_sum[1:][-smoothing_window:].sum(axis=0),
                     ),
@@ -272,7 +286,7 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
             income_budget_scalar = (1 - saving_rates) * income
             historical_budget_scalar = (
                 consumption_smoothing_fraction
-                * (1 + tau_vat)
+                * (1 + tau_vat_scalar)
                 * (1 / smoothing_window)
                 * historic_consumption_sum[1:][-smoothing_window:].sum(axis=0)
             )
@@ -282,9 +296,9 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
                 np.maximum(minimum_budget_scalar, income_budget_scalar),
                 historical_budget_scalar,
             )
-            target_consumption_scalar_improved = (      
+            target_consumption_scalar_2b = (      
                 1.0
-                / (1 + tau_vat)
+                / (1 + tau_vat_scalar)
                 * np.outer(
                     consumption_weights,
                     budget_scalar,
@@ -292,13 +306,19 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
             )
         
             # test to see if the two methods are equivalent when that element values of tau_vat and tau_vat_vector are equal
-            if np.allclose(target_consumption, target_consumption_scalar):
-                print("success both methods are equivalent!")
+            if np.allclose(target_consumption_vector, target_consumption_scalar_2a):
+                print("Success methods 1 and 2a are equivalent!")
+            else:
+                print("NOTE: Method 1 != 2b is fine as long as methods 1 and 2b are equal")
+
+            if np.allclose(target_consumption_vector, target_consumption_scalar_2b):
+                print("Success methods 1 and 2b are equivalent!")
 
         return np.maximum(0.0, target_consumption)
 
 
-class CESHouseholdConsumption(HouseholdConsumption):
+class CESHouseholdConsumption(HouseholdConsumption):     
+    # TODO: CESHouseholdConsumption class (used with goods substitution) has not been updated for vector tau_vat (currently not needed)
     """CES (Constant Elasticity of Substitution) household consumption implementation.
 
     Implements consumption decisions with substitution within bundles based on:

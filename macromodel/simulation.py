@@ -309,6 +309,8 @@ class Simulation:
                 if country.use_taxation_policies:
                     country.update_brackets(self.timestep.year)
                     country.update_nonrefundable_credits(self.timestep.year)
+                    if country.country_name == 'CAN_BC':                            # TODO: Temporary: Update consumer_tax-rates.csv to include other provinces
+                        country.update_consumer_rates(self.timestep.year)
 
         # Update individual states that use fin data for new timestep
         for country in self.countries.values():

@@ -13,7 +13,7 @@ The central government plays a crucial role in:
 - Public finance management
 """
 
-from typing import Any
+from typing import Any, Optional
 
 import h5py
 import numpy as np
@@ -30,6 +30,7 @@ from macromodel.timeseries import TimeSeries
 from macromodel.util.function_mapping import functions_from_model, update_functions
 
 from macromodel.policy.personal_income_tax import PersonalIncomeTax
+from macromodel.policy.consumer_tax import ConsumerTax
 
 
 class CentralGovernment(Agent):
@@ -95,6 +96,7 @@ class CentralGovernment(Agent):
         tax_data: TaxData,
         number_of_unemployed_individuals: int,
         taxes_net_subsidies: np.ndarray,
+        consumer_tax: Optional[ConsumerTax] = None,
     ):
         """Create a Central Government instance from pickled data.
 
@@ -113,6 +115,7 @@ class CentralGovernment(Agent):
             tax_data (TaxData): Historical tax rate data
             number_of_unemployed_individuals (int): Count of unemployed
             taxes_net_subsidies (np.ndarray): Net tax rates by sector
+            consumer_tax (Optional[ConsumerTax]): Consumer tax policy
 
         Returns:
             CentralGovernment: Initialized government agent
@@ -137,6 +140,7 @@ class CentralGovernment(Agent):
         ts = create_central_government_timeseries(
             data=data,
             number_of_unemployed_individuals=number_of_unemployed_individuals,
+            consumer_tax=consumer_tax,
         )
 
         return cls(
@@ -264,6 +268,7 @@ class CentralGovernment(Agent):
         current_income_financial_assets: np.ndarray,
         current_ind_activity: np.ndarray,
         current_ind_realised_cons: np.ndarray,
+        current_ind_consumption_by_good: np.ndarray,
         current_bank_profits: np.ndarray,
         current_firm_production: np.ndarray,
         current_firm_price: np.ndarray,
@@ -274,6 +279,7 @@ class CentralGovernment(Agent):
         current_total_exports: float,
         use_taxation_policies: bool,
         individuals_personal_income_tax_paid: np.ndarray,
+        consumer_tax: Optional[ConsumerTax] = None,
     ) -> None:
         """Calculate all tax revenues for the current period.
 
@@ -289,6 +295,7 @@ class CentralGovernment(Agent):
             current_income_financial_assets (np.ndarray): Financial income
             current_ind_activity (np.ndarray): Individual activity status
             current_ind_realised_cons (np.ndarray): Consumption levels
+            current_ind_consumption_by_good (np.ndarray): Consumption by good levels
             current_bank_profits (np.ndarray): Bank profits
             current_firm_production (np.ndarray): Firm production
             current_firm_price (np.ndarray): Product prices
@@ -299,6 +306,7 @@ class CentralGovernment(Agent):
             current_total_exports (float): Total exports
             use_taxation_policies (bool): Toggle for taxation policies
             individuals_personal_income_tax_paid (np.ndarray): Amount individuals paid for personal income tax
+            consumer_tax (Optional[ConsumerTax]): Consumer tax policy
         """
         debug = False   # Diagnostic
         
@@ -308,7 +316,10 @@ class CentralGovernment(Agent):
         )
 
         # Value-added taxes
-        self.ts.taxes_vat.append([self.states["Value-added Tax"] * np.sum(current_ind_realised_cons)])
+        if use_taxation_policies and consumer_tax is not None:
+            self.ts.taxes_vat.append(consumer_tax.rates * current_ind_consumption_by_good.sum(axis=0))
+        else:
+            self.ts.taxes_vat.append([self.states["Value-added Tax"] * np.sum(current_ind_realised_cons)])
 
         # Taxes on capital formation
         self.ts.taxes_cf.append(
@@ -361,7 +372,7 @@ class CentralGovernment(Agent):
         # Taxes on employer social insurance
         self.ts.taxes_employer_si.append([self.states["Employer Social Insurance Tax"] * tot_wages_employed_ind])
 
-    def compute_taxes_on_products(self) -> float:
+    def compute_taxes_on_products(self, consumer_tax) -> float:
         """Calculate total taxes on products and production.
 
         Aggregates various product-related taxes:
@@ -370,15 +381,27 @@ class CentralGovernment(Agent):
         - Capital formation tax
         - Export taxes
 
+        Args:
+            consumer_tax (Optional[ConsumerTax]): Consumer tax policy
+
         Returns:
             float: Total tax revenue from products and production
         """
-        return (
-            self.ts.current("taxes_production")[0]
-            + self.ts.current("taxes_vat")[0]
-            + self.ts.current("taxes_cf")[0]
-            + self.ts.current("taxes_exports")[0]
-        )
+        if consumer_tax is not None:
+            taxes_on_products = (
+                self.ts.current("taxes_production")[0]
+                + np.sum(self.ts.current("taxes_vat"))
+                + self.ts.current("taxes_cf")[0]
+                + self.ts.current("taxes_exports")[0]
+            )
+        else:
+            taxes_on_products = (
+                self.ts.current("taxes_production")[0]
+                + self.ts.current("taxes_vat")[0]
+                + self.ts.current("taxes_cf")[0]
+                + self.ts.current("taxes_exports")[0]
+            )
+        return taxes_on_products
 
     def compute_revenue(
         self,

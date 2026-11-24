@@ -1,0 +1,44 @@
+Firm_ID,Industry,Industry_Name,Energy
+0,A01,"Agriculture, hunting, forestry, and fishing",non_energy
+1,B05a,Coal mining,energy
+2,B05b,Natural gas extraction,energy
+3,B05c,Petroleum crude,energy
+4,B07,"Mining and quarrying, non-energy producing products",non_energy
+5,B09,Mining support service activities,non_energy
+6,C10T12,"Food products, beverages and tobacco",energy
+7,C13T15,"Textiles, textile products, leather and footwear",energy
+8,C16,Wood and products of wood and cork,energy
+9,C17,Paper products and printing,energy
+10,C19,Coke and refined petroleum products,energy
+11,C20,Chemical and chemical products,energy
+12,C21,"Pharmaceuticals, medicinal chemical and botanical products",energy
+13,C22,Rubber and plastics products,energy
+14,C23,Other non-metallic mineral products,energy
+15,C24a,Iron and steel,energy
+16,C24b,Other basic metals,energy
+17,C25,Fabricated metal products,energy
+18,C26,"Computer, electronic and optical equipment",energy
+19,C27,Electrical equipment,energy
+20,C28,"Machinery and equipment, nec ",energy
+21,C29,"Motor vehicles, trailers and semi-trailers",energy
+22,C30,Other transport equipment,energy
+23,C31T33,Manufacturing nec; repair and installation of machinery and equipment,energy
+24,D,Electricity,energy
+25,E,"Water supply; sewerage, waste management and remediation activities",non_energy
+26,F,Construction,non_energy
+27,G,Wholesale and retail trade; repair of motor vehicles,non_energy
+28,H49,Land transport and transport via pipelines,energy
+29,H50,Water transport,energy
+30,H51,Air transport,energy
+31,H52,Warehousing and support activities for transportation,energy
+32,H53,Postal and courier activities,non_energy
+33,I,Accommodation and food service activities,non_energy
+34,J,"Publishing, audiovisual and broadcasting activities / Telecoms / IT services",non_energy
+35,K,Financial and insurance activities,non_energy
+36,L,Real estate activities,non_energy
+37,M,"Professional, scientific and technical activities",non_energy
+38,N,Administrative and support services,non_energy
+39,O,Public administration and defence; compulsory social security,non_energy
+40,P,Education,non_energy
+41,Q,Human health and social work activities,non_energy
+42,R_S,"Arts, entertainment, recreation and other",non_energy

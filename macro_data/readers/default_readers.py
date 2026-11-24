@@ -64,6 +64,7 @@ from macro_data.readers.taxation.personal_income_tax.personal_income_tax_reader 
     PersonalIncomeTaxBracketsReader,
     PersonalIncomeTaxNonrefundableCreditsReader,
 )
+from macro_data.readers.taxation.consumer_tax.consumer_tax_reader import ConsumerTaxReader
 from macro_data.readers.fin_data.donations.donation_reader import DonationReader
 
 @dataclass
@@ -96,6 +97,7 @@ class DataPaths:
         emissions_path (Path): Path to emissions data
         personal_income_tax_brackets_path (Path): Path to personal income tax bracket data
         personal_income_tax_nonrefundable_credits_path (Path): Path to personal income tax nonrefundable credit data
+        consumer_tax_path (Path): Path to consumer tax data
         donations_path (Path): Path to donations data
     """
 
@@ -123,6 +125,7 @@ class DataPaths:
     ch4_emissions_path: Optional[Path] = None
     personal_income_tax_brackets_path: Optional[Path] = None
     personal_income_tax_nonrefundable_credits_path: Optional[Path] = None
+    consumer_tax_path: Optional[Path] = None
     donations_path: Optional[Path] = None
 
     @classmethod
@@ -165,6 +168,8 @@ class DataPaths:
             / "taxation" / "personal_income_tax" / "personal_income_tax-rates_thresholds.csv",
             personal_income_tax_nonrefundable_credits_path=raw_data_path 
             / "taxation" / "personal_income_tax" / "personal_income_tax-non_refundable_tax_credits.csv",
+            consumer_tax_path=raw_data_path 
+            / "taxation" / "consumer_tax" / "consumer_tax-rates.csv",
             donations_path=raw_data_path.parent 
             / "raw_data_FIN" / "donations" / "donation_distribution.csv",
         )
@@ -226,6 +231,7 @@ class DataReaders:
     regions_dict: Optional[dict[Country, list[Region]]] = None
     personal_income_tax_brackets: Optional[PersonalIncomeTaxBracketsReader] = None
     personal_income_tax_nonrefundable_credits: Optional[PersonalIncomeTaxNonrefundableCreditsReader] = None
+    consumer_tax_rates: Optional[ConsumerTaxReader] = None
     donations: Optional[DonationReader] = None
 
     @classmethod
@@ -522,6 +528,12 @@ class DataReaders:
                 datapaths.personal_income_tax_nonrefundable_credits_path
                 )
 
+        consumer_tax_rates = None
+        if datapaths.consumer_tax_path is not None and datapaths.consumer_tax_path.exists():
+            consumer_tax_rates = ConsumerTaxReader.read_from_raw_data(
+                datapaths.consumer_tax_path
+                )
+
         donations = None
         if datapaths.donations_path is not None and datapaths.donations_path.exists():
             donations = DonationReader.read_from_raw_data(datapaths.donations_path)
@@ -548,6 +560,7 @@ class DataReaders:
             regions_dict=regions_dict,
             personal_income_tax_brackets=personal_income_tax_brackets,
             personal_income_tax_nonrefundable_credits=personal_income_tax_nonrefundable_credits,
+            consumer_tax_rates=consumer_tax_rates,
             donations=donations,
         )
 
