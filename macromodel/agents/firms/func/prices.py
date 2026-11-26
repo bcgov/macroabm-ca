@@ -74,6 +74,7 @@ class PriceSetter(ABC):
         prev_unit_costs: np.ndarray,
         ppi_during: np.ndarray,
         current_time: int,
+        additional_goods_taxes: np.ndarray,
     ) -> np.ndarray:
         """Calculate prices for each firm based on market conditions.
 
@@ -98,6 +99,7 @@ class PriceSetter(ABC):
             prev_unit_costs (np.ndarray): Previous unit costs
             ppi_during (np.ndarray): PPI time series
             current_time (int): Current period index
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies
 
         Returns:
             np.ndarray: Updated prices by firm
@@ -137,6 +139,7 @@ class DefaultPriceSetter(PriceSetter):
         prev_unit_costs: np.ndarray,
         ppi_during: np.ndarray,
         current_time: int,
+        additional_goods_taxes: np.ndarray,
         min_inflation: float = -0.1,
         max_inflation: float = 0.1,
     ) -> np.ndarray:
@@ -162,18 +165,21 @@ class DefaultPriceSetter(PriceSetter):
         Returns:
             np.ndarray: Updated prices by firm, guaranteed to be positive
         """
-        average_price_by_firm = prev_average_good_prices[current_firm_sectors]
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(prev_average_good_prices)
+
+        average_price_by_firm = prev_average_good_prices[current_firm_sectors] + additional_goods_taxes[current_firm_sectors]
 
         # Demand-pull inflation
         demand_pull_inflation = np.zeros_like(prev_firm_prices)
         ind_canvas = np.logical_or(
             np.logical_and(
                 prev_supply <= prev_demand,
-                prev_firm_prices < average_price_by_firm,
+                (prev_firm_prices + additional_goods_taxes) < average_price_by_firm,
             ),
             np.logical_and(
                 prev_supply > prev_demand,
-                prev_firm_prices >= average_price_by_firm,
+                (prev_firm_prices + additional_goods_taxes) >= average_price_by_firm,
             ),
         )
         demand_pull_inflation[ind_canvas] = (
@@ -274,6 +280,7 @@ class SectorExogenousPriceSetter(DefaultPriceSetter):
         prev_unit_costs: np.ndarray,
         ppi_during: np.ndarray,
         current_time: int,
+        additional_goods_taxes: np.ndarray,
         min_inflation: float = -0.1,
         max_inflation: float = 0.1,
     ) -> np.ndarray:
@@ -315,6 +322,7 @@ class SectorExogenousPriceSetter(DefaultPriceSetter):
             prev_unit_costs=prev_unit_costs,
             ppi_during=ppi_during,
             current_time=current_time,
+            additional_goods_taxes=additional_goods_taxes,
             min_inflation=min_inflation,
             max_inflation=max_inflation,
         )
@@ -369,6 +377,7 @@ class ExogenousPriceSetter(PriceSetter):
         prev_unit_costs: np.ndarray,
         ppi_during: np.ndarray,
         current_time: int,
+        additional_goods_taxes: np.ndarray,
         min_inflation: float = -0.1,
         max_inflation: float = 0.1,
     ) -> np.ndarray:

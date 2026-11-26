@@ -47,7 +47,7 @@ def create_central_government_timeseries(
             variables with their initial values
     """
     if consumer_tax is not None:
-        taxes_vat=consumer_tax.rates        # NOTE: for vector tau_vat  # TODO: find better initialization value
+        taxes_vat=np.zeros_like(consumer_tax.rates) # NOTE: for vector tau_vat  # TODO: Termporary: find better initialization value
     else:
         taxes_vat=[data["VAT"].values[0]]   # NOTE: for scalar tau_vat
 
@@ -60,6 +60,7 @@ def create_central_government_timeseries(
         #
         taxes_production=[data["Taxes on Production"].values[0]],
         taxes_vat=taxes_vat,
+        taxes_firm_vat=taxes_vat,           # TODO: Temporary: find a better initialization value
         taxes_cf=[data["Capital Formation Taxes"].values[0]],
         taxes_corporate_income=[data["Corporate Taxes"].values[0]],
         taxes_exports=[data["Export Taxes"].values[0]],

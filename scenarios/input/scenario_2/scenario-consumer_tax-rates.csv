@@ -1,8 +1,8 @@
 year,jurisdiction,Firm_ID,Industry,Industry_Name,rate
 2014,CAN_BC,0,A01,"Agriculture, hunting, forestry, and fishing",0
-2014,CAN_BC,1,B05a,Coal mining,0.14
-2014,CAN_BC,2,B05b,Natural gas extraction,0.14
-2014,CAN_BC,3,B05c,Petroleum crude,0.14
+2014,CAN_BC,1,B05a,Coal mining,0.07
+2014,CAN_BC,2,B05b,Natural gas extraction,0.07
+2014,CAN_BC,3,B05c,Petroleum crude,0.07
 2014,CAN_BC,4,B07,"Mining and quarrying, non-energy producing products",0.07
 2014,CAN_BC,5,B09,Mining support service activities,0.07
 2014,CAN_BC,6,C10T12,"Food products, beverages and tobacco",0.05

@@ -50,7 +50,7 @@ class TargetIntermediateInputsSetter(ABC):
         initial_production: np.ndarray,
         previous_good_prices: np.ndarray,
         substitution_bundle_matrix: np.ndarray,
-        extra_taxes: Optional[np.ndarray] = None,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Calculate unconstrained target intermediate inputs for each firm.
 
@@ -70,7 +70,7 @@ class TargetIntermediateInputsSetter(ABC):
             previous_good_prices (np.ndarray): Previous period's input prices
             substitution_bundle_matrix (np.ndarray): Matrix defining substitution
                 bundles for inputs (not used in Leontief technology)
-            extra_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
+            additional_goods_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
                 that may affect input decisions. Defaults to None.
 
         Returns:
@@ -130,7 +130,7 @@ class FinancialTargetIntermediateInputsSetter(TargetIntermediateInputsSetter):
         initial_production: np.ndarray,
         previous_good_prices: np.ndarray,
         substitution_bundle_matrix: np.ndarray,
-        extra_taxes: Optional[np.ndarray] = None,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Calculate unconstrained intermediate input targets with stock adjustment.
 
@@ -150,7 +150,7 @@ class FinancialTargetIntermediateInputsSetter(TargetIntermediateInputsSetter):
             previous_good_prices (np.ndarray): Previous period's input prices
             substitution_bundle_matrix (np.ndarray): Matrix defining substitution
                 bundles for inputs (not used in Leontief technology)
-            extra_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
+            additional_goods_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
                 that may affect input decisions. Defaults to None.
 
         Returns:
@@ -264,7 +264,7 @@ class BundleWeightedTargetIntermediateInputsSetter(FinancialTargetIntermediateIn
         initial_production: np.ndarray,
         previous_good_prices: np.ndarray,
         substitution_bundle_matrix: np.ndarray,
-        extra_taxes: Optional[np.ndarray] = None,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Calculate bundle-weighted unconstrained intermediate input targets.
 
@@ -284,15 +284,15 @@ class BundleWeightedTargetIntermediateInputsSetter(FinancialTargetIntermediateIn
             previous_good_prices (np.ndarray): Previous period's input prices
             substitution_bundle_matrix (np.ndarray): Matrix defining substitution
                 bundles for inputs
-            extra_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
+            additional_goods_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
                 that may affect input decisions. Defaults to None.
 
         Returns:
             np.ndarray: Bundle-weighted unconstrained target intermediate inputs
         """
 
-        if extra_taxes is None:
-            extra_taxes = np.zeros_like(previous_good_prices)
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(previous_good_prices)
 
         # Get base unconstrained targets from parent class
         base_targets = super().compute_unconstrained_target_intermediate_inputs(
@@ -304,7 +304,7 @@ class BundleWeightedTargetIntermediateInputsSetter(FinancialTargetIntermediateIn
             initial_production,
             previous_good_prices,
             substitution_bundle_matrix,
-            extra_taxes,
+            additional_goods_taxes,
         )
 
         # Calculate average price (using nanmean to handle potential NaN values)
@@ -312,7 +312,7 @@ class BundleWeightedTargetIntermediateInputsSetter(FinancialTargetIntermediateIn
 
         # Calculate unnormalized weights
         # exp(-beta / avg_price * price[j] / productivity_matrix[i,j])
-        unnormalized_weights = np.exp(-self.beta / avg_price * (previous_good_prices + extra_taxes))
+        unnormalized_weights = np.exp(-self.beta / avg_price * (previous_good_prices + additional_goods_taxes))
 
         unnormalized_weights = np.outer(np.ones_like(unnormalized_weights), unnormalized_weights)
 

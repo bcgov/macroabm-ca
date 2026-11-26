@@ -423,6 +423,7 @@ class Firms(Agent):
         self,
         current_estimated_growth: float,
         previous_average_good_prices: np.ndarray,
+        additional_goods_taxes: np.ndarray,
     ) -> None:
         """Set growth and demand estimates for firms.
 
@@ -432,9 +433,13 @@ class Firms(Agent):
         Args:
             current_estimated_growth (float): Overall estimated growth rate
             previous_average_good_prices (np.ndarray): Previous period prices
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies
         """
         self.ts.estimated_growth_by_firm.append(
-            self.compute_estimated_growth_by_firm(previous_average_good_prices=previous_average_good_prices)
+            self.compute_estimated_growth_by_firm(
+                previous_average_good_prices=previous_average_good_prices,
+                additional_goods_taxes=additional_goods_taxes,
+            )
         )
         self.ts.estimated_demand.append(
             self.compute_estimated_demand(current_estimated_growth=current_estimated_growth)
@@ -443,6 +448,7 @@ class Firms(Agent):
     def compute_estimated_growth_by_firm(
         self,
         previous_average_good_prices: np.ndarray,
+        additional_goods_taxes: np.ndarray,
         min_growth: float = -0.2,
         max_growth: float = 0.2,
     ) -> np.ndarray:
@@ -456,6 +462,7 @@ class Firms(Agent):
 
         Args:
             previous_average_good_prices (np.ndarray): Previous period prices
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies
             min_growth (float, optional): Minimum growth rate. Defaults to -0.2.
             max_growth (float, optional): Maximum growth rate. Defaults to 0.2.
 
@@ -469,6 +476,7 @@ class Firms(Agent):
         growth = self.functions["growth_estimator"].compute_growth(
             prev_average_good_prices=previous_average_good_prices,
             prev_firm_prices=self.ts.current("price"),
+            additional_goods_taxes=additional_goods_taxes,
             prev_supply=prev_supply,
             prev_demand=self.ts.current("demand"),
             current_firm_sectors=self.states["Industry"],
@@ -1034,26 +1042,9 @@ class Firms(Agent):
 
             # Test equality of total income tax due and the assignment to individual firms  
             a = np.sum(firm_personal_income_tax)
-            b = np.sum(individuals_personal_income_tax_owed[corresponding_firm >= 0])
+            b = np.sum(individuals_personal_income_tax_paid[corresponding_firm >= 0])
             # NOTE: only considers individuals assigned to firms
             print(f"Is the total income tax due and the assignment to individual firms close: {math.isclose(a, b)}")
-
-            # Test equality of post-tax wage + tax ?= pre-tax wage
-            from macromodel.policy.personal_income_tax import ProgressiveRate
-            from macromodel.policy.personal_income_tax import FlatRate
-
-            rate_flat = [(float('inf'), 0.09)]                  # TODO: update to load
-            scale = 1000                                        # TODO: update to load
-
-            personal_income_tax_flat = FlatRate(rate_flat)      # TODO update to use country_configuration.rate_flat
-            for i in range(len(individuals_personal_income_tax_owed)):
-                timestep_tax = personal_income_tax_flat.compute_individual_tax(
-                    (individual_wages[i]  + individuals_personal_income_tax_owed[i])/ scale
-                    ) * scale
-                if timestep_tax != individuals_personal_income_tax_owed[i]:
-                    print(f"Error: tax due from pre-tax wage != tax: " +
-                          f"{timestep_tax:,.2f} vs {individuals_personal_income_tax_owed[i]:,.2f}"
-                          )
 
             # Compare difference between methods
             tax = (
@@ -1079,6 +1070,7 @@ class Firms(Agent):
         current_estimated_ppi_inflation: np.ndarray,
         previous_average_good_prices: np.ndarray,
         ppi_during: np.ndarray,
+        additional_goods_taxes: np.ndarray,
     ) -> np.ndarray:
         """Set prices for each firm's output.
 
@@ -1094,6 +1086,7 @@ class Firms(Agent):
             current_estimated_ppi_inflation (np.ndarray): Expected PPI inflation
             previous_average_good_prices (np.ndarray): Previous period prices
             ppi_during (np.ndarray): Producer price indices
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies
 
         Returns:
             np.ndarray: New prices for each firm
@@ -1119,11 +1112,14 @@ class Firms(Agent):
             ),
             ppi_during=ppi_during,
             current_time=len(self.ts.historic("price")),
+            additional_goods_taxes=additional_goods_taxes,
         )
 
     def compute_unconstrained_demand_for_intermediate_inputs(
-        self, good_prices: np.ndarray, extra_taxes: Optional[np.ndarray] = None
-    ) -> np.ndarray:
+            self, 
+            good_prices: np.ndarray, 
+            additional_goods_taxes: Optional[np.ndarray] = None,
+        ) -> np.ndarray:
         """Calculate unconstrained demand for intermediate inputs.
 
         Determines optimal intermediate input requirements without
@@ -1135,7 +1131,7 @@ class Firms(Agent):
 
         Args:
             good_prices (np.ndarray): Current prices for inputs
-            extra_taxes (np.ndarray, optional): Additional taxes on inputs. Defaults to None.
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
 
         Returns:
             np.ndarray: Unconstrained intermediate input demand for each firm
@@ -1149,10 +1145,14 @@ class Firms(Agent):
             initial_production=self.ts.initial("production"),
             previous_good_prices=good_prices,
             substitution_bundle_matrix=self.substitution_bundles,
-            extra_taxes=extra_taxes,
+            additional_goods_taxes=additional_goods_taxes,
         )
 
-    def compute_unconstrained_demand_for_intermediate_inputs_value(self, current_good_prices: np.ndarray) -> np.ndarray:
+    def compute_unconstrained_demand_for_intermediate_inputs_value(
+            self, 
+            current_good_prices: np.ndarray,
+            additional_goods_taxes: Optional[np.ndarray] = None
+        ) -> np.ndarray:
         """Calculate value of unconstrained intermediate input demand.
 
         Computes the monetary value of desired intermediate inputs
@@ -1160,18 +1160,24 @@ class Firms(Agent):
 
         Args:
             current_good_prices (np.ndarray): Current prices for inputs
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
 
         Returns:
             np.ndarray: Value of unconstrained intermediate input demand for each firm
         """
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(current_good_prices)
+
         return np.matmul(
             self.ts.current("unconstrained_target_intermediate_inputs"),
-            current_good_prices,
+            (current_good_prices + additional_goods_taxes),
         )
 
     def compute_unconstrained_demand_for_capital_inputs(
-        self, good_prices: np.ndarray, extra_taxes: Optional[np.ndarray] = None
-    ) -> np.ndarray:
+            self, 
+            good_prices: np.ndarray, 
+            additional_goods_taxes: Optional[np.ndarray] = None
+        ) -> np.ndarray:
         """Calculate unconstrained demand for capital inputs.
 
         Determines optimal capital input requirements without
@@ -1183,7 +1189,7 @@ class Firms(Agent):
 
         Args:
             good_prices: np.ndarray
-            extra_taxes (np.ndarray, optional): Additional taxes on inputs. Defaults to None.
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
 
         Returns:
             np.ndarray: Unconstrained capital input demand for each firm
@@ -1199,16 +1205,38 @@ class Firms(Agent):
             initial_production=self.ts.initial("production"),
             substitution_bundle_matrix=self.substitution_bundles,
             previous_good_prices=good_prices,
-            extra_taxes=extra_taxes,
+            additional_goods_taxes=additional_goods_taxes,
         )
 
-    def compute_unconstrained_demand_for_capital_inputs_value(self, current_good_prices: np.ndarray) -> np.ndarray:
+    def compute_unconstrained_demand_for_capital_inputs_value(
+            self, 
+            current_good_prices: np.ndarray,
+            additional_goods_taxes: Optional[np.ndarray] = None,
+        ) -> np.ndarray:
+        """
+        Calculate value of unconstrained capital input demand.
+        
+        Args:
+            current_good_prices:
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
+
+        Returns:
+            np.ndarray: Value of unconstrained capital input demand for each firm
+        """
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(current_good_prices)
+
         return np.matmul(
             self.ts.current("unconstrained_target_capital_inputs"),
-            current_good_prices,
+            (current_good_prices + additional_goods_taxes),
         )
 
-    def compute_target_credit(self, estimated_growth: float, estimated_inflation: float) -> None:
+    def compute_target_credit(
+            self, 
+            estimated_growth: float, 
+            estimated_inflation: float,
+            additional_goods_taxes: Optional[np.ndarray] = None,
+        ) -> None:
         """Calculate target borrowing levels for each firm.
 
         Determines desired short-term and long-term credit based on:
@@ -1220,12 +1248,16 @@ class Firms(Agent):
         Args:
             estimated_growth (float): Expected real growth rate
             estimated_inflation (float): Expected inflation rate
+            additional_goods_taxes: Optional[np.ndarray] = None
         """
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(self.ts.current("price"))
+        
         estimated_corporate_taxes = (
             (1 + estimated_growth) * (1 + estimated_inflation) * self.ts.current("corporate_taxes_paid")
         )
         estimated_change_in_deposits = (
-            self.ts.current("price") * self.ts.current("production")
+            (self.ts.current("price") + additional_goods_taxes) * self.ts.current("production")
             - self.ts.current("total_wage")
             - self.ts.current("labour_costs")
             - self.ts.current("taxes_paid_on_production")
@@ -1372,7 +1404,7 @@ class Firms(Agent):
         # Setting total real amount of goods to buy
         self.set_goods_to_buy(self.ts.current("target_intermediate_inputs") + self.ts.current("target_capital_inputs"))
 
-    def prepare_selling_goods(self) -> None:
+    def prepare_selling_goods(self, additional_goods_taxes: Optional[np.ndarray] = None) -> None:
         """Prepare firms' selling plans for goods market.
 
         Sets up:
@@ -1380,9 +1412,15 @@ class Firms(Agent):
         - Prices in USD
         - Industry classifications
         - Maximum excess demand
+
+        Args:
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies
         """
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(self.ts.current("price"))
+
         self.set_goods_to_sell(self.ts.current("production") + self.ts.current("inventory"))
-        self.ts.price_in_usd.append(1.0 / self.exchange_rate_usd_to_lcu * self.ts.current("price"))
+        self.ts.price_in_usd.append(1.0 / self.exchange_rate_usd_to_lcu * (self.ts.current("price") + additional_goods_taxes))
         self.ts.price_offered.append(self.compute_offered_price())
         self.set_prices(self.ts.current("price_in_usd"))
         self.set_seller_industries(self.states["Industry"])
@@ -1393,6 +1431,7 @@ class Firms(Agent):
         exchange_rate_usd_to_lcu: float,
         previous_good_prices: np.ndarray,
         expected_inflation: float,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> None:
         """Prepare all aspects of goods market participation.
 
@@ -1405,13 +1444,14 @@ class Firms(Agent):
             exchange_rate_usd_to_lcu (float): Exchange rate USD to local currency
             previous_good_prices (np.ndarray): Previous period prices
             expected_inflation (float): Expected inflation rate
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies
         """
         self.set_exchange_rate(exchange_rate_usd_to_lcu)
         self.prepare_buying_goods(
             previous_good_prices=previous_good_prices,
             expected_inflation=expected_inflation,
         )
-        self.prepare_selling_goods()
+        self.prepare_selling_goods(additional_goods_taxes=additional_goods_taxes)
 
     def distribute_bought_goods(self) -> None:
         """Distribute purchased goods between intermediate and capital inputs.
@@ -1688,13 +1728,19 @@ class Firms(Agent):
         """
         return (self.ts.current("capital_inputs_stock") * current_good_prices).sum(axis=1)
 
-    def compute_total_inventory_change(self) -> np.ndarray:
+    def compute_total_inventory_change(self, additional_goods_taxes: Optional[np.ndarray] = None) -> np.ndarray:
         """Calculate nominal change in inventory value.
+        
+        Args:
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies 
 
         Returns:
             np.ndarray: Change in inventory value for each firm
         """
-        return self.ts.current("price") * (self.ts.current("inventory") - self.ts.prev("inventory"))
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(self.ts.current("price"))
+
+        return (self.ts.current("price") + additional_goods_taxes) * (self.ts.current("inventory") - self.ts.prev("inventory"))
 
     def compute_taxes_paid_on_production(self, taxes_less_subsidies_rates: np.ndarray) -> np.ndarray:
         """Calculate taxes paid on production.
@@ -1711,6 +1757,27 @@ class Firms(Agent):
             * self.ts.current("price")
         )
 
+    def compute_consumer_taxes_paid(self, additional_goods_taxes: Optional[np.ndarray] = None) -> np.ndarray:
+            """Calculate consumer taxes paid on intermediate consumption.
+    
+            Args:
+                additional_goods_taxes (np.ndarray): Taxes on goods from policies
+    
+            Returns:
+                np.ndarray: consumer taxes paid by each firm
+            """
+            if additional_goods_taxes is None:
+                additional_goods_taxes = np.zeros_like(self.ts.current("price"))
+
+            # NOTE: consumer_taxes_paid should be zero if additional_goods_taxes are zero
+            # NOTE: used_intermediate_inputs[firm index,input index] so sum over axis 1
+            consumer_taxes_paid = (
+                (self.ts.current("used_intermediate_inputs").sum(axis=1) * additional_goods_taxes)
+                # + (self.ts.current("used_capital_inputs_costs").sum(axis=1) * additional_goods_taxes)    # TODO: Consider whether self.ts.used_capital_inputs_costs should be included?
+            )
+            
+            return consumer_taxes_paid
+
     def compute_profits(self) -> np.ndarray:
         """Calculate profits for each firm.
 
@@ -1719,6 +1786,7 @@ class Firms(Agent):
         - Wages
         - Input costs
         - Production taxes
+        - Intermediate Consumption taxes
         - Interest
 
         Returns:
@@ -1730,6 +1798,7 @@ class Firms(Agent):
             - self.ts.current("used_intermediate_inputs_costs")
             - self.ts.current("used_capital_inputs_costs")
             - self.ts.current("taxes_paid_on_production")
+            - self.ts.current("consumer_tax_paid")
             - self.ts.current("interest_paid")
         )
 
@@ -1749,7 +1818,8 @@ class Firms(Agent):
             self.ts.current("total_wage")
             + self.ts.current("used_intermediate_inputs_costs")
             + self.ts.current("used_capital_inputs_costs")
-            + self.ts.current("taxes_paid_on_production"),
+            + self.ts.current("taxes_paid_on_production")
+            + self.ts.current("consumer_tax_paid"),
             self.ts.current("production"),
             out=np.zeros_like(self.ts.current("production")),
             where=self.ts.current("production") != 0.0,
@@ -1786,6 +1856,7 @@ class Firms(Agent):
             - self.ts.current("used_intermediate_inputs_costs")
             - self.ts.current("used_capital_inputs_costs")
             - self.ts.current("taxes_paid_on_production")
+            - self.ts.current("consumer_tax_paid")
             - self.ts.current("corporate_taxes_paid")
             - self.ts.current("interest_paid")
             + self.ts.current("received_credit")

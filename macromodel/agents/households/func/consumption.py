@@ -81,7 +81,7 @@ class HouseholdConsumption(ABC):
             exogenous_total_consumption (np.ndarray): External consumption target
             current_time (int): Current period
             take_consumption_weights_by_income_quantile (bool): Use income quintiles
-            tau_vat (float): Value added tax rate
+            tau_vat (np.ndarray): Value added tax rate
 
         Returns:
             np.ndarray: Target consumption by household and industry
@@ -309,7 +309,7 @@ class DefaultHouseholdConsumption(HouseholdConsumption):
             if np.allclose(target_consumption_vector, target_consumption_scalar_2a):
                 print("Success methods 1 and 2a are equivalent!")
             else:
-                print("NOTE: Method 1 != 2b is fine as long as methods 1 and 2b are equal")
+                print("NOTE: Method 1 != 2a is fine as long as methods 1 and 2b are equal")
 
             if np.allclose(target_consumption_vector, target_consumption_scalar_2b):
                 print("Success methods 1 and 2b are equivalent!")

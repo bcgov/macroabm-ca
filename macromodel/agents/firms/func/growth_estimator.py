@@ -67,6 +67,7 @@ class DefaultGrowthEstimator(GrowthEstimator):
         self,
         prev_average_good_prices: np.ndarray,
         prev_firm_prices: np.ndarray,
+        additional_goods_taxes: np.ndarray,
         prev_supply: np.ndarray,
         prev_demand: np.ndarray,
         current_firm_sectors: np.ndarray,
@@ -86,6 +87,7 @@ class DefaultGrowthEstimator(GrowthEstimator):
             prev_average_good_prices (np.ndarray): Previous period's average
                 prices by sector
             prev_firm_prices (np.ndarray): Previous period's prices by firm
+            additional_goods_taxes (np.ndarray): Taxes on goods from policies
             prev_supply (np.ndarray): Previous period's supply by firm
             prev_demand (np.ndarray): Previous period's demand by firm
             current_firm_sectors (np.ndarray): Sector ID for each firm
@@ -94,16 +96,19 @@ class DefaultGrowthEstimator(GrowthEstimator):
             np.ndarray: Growth rates by firm, where positive values indicate
                 expansion and negative values indicate contraction
         """
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(prev_firm_prices)
+
         average_price_by_firm = prev_average_good_prices[current_firm_sectors]
         firm_growth_rates = np.zeros_like(prev_firm_prices)
         ind_canvas = np.logical_or(
             np.logical_and(
                 prev_supply <= prev_demand,
-                prev_firm_prices >= average_price_by_firm,
+                (prev_firm_prices + additional_goods_taxes) >= average_price_by_firm,
             ),
             np.logical_and(
                 prev_supply > prev_demand,
-                prev_firm_prices < average_price_by_firm,
+                (prev_firm_prices + additional_goods_taxes) < average_price_by_firm,
             ),
         )
         firm_growth_rates[ind_canvas] = (

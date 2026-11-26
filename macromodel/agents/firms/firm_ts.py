@@ -219,6 +219,7 @@ class FirmTimeSeries(TimeSeries):
             real_wage_per_capita=data["Total Wages Paid"].values / data["Number of Employees"].values,
             unit_costs=data["Unit Costs"].values,
             taxes_paid_on_production=data["Taxes paid on Production"].values,
+            consumer_tax_paid=np.zeros_like(data["Taxes paid on Production"].values),   # TODO: find a better initialization value
             corporate_taxes_paid=data["Corporate Taxes Paid"].values,
             equity=data["Equity"].values,
             #

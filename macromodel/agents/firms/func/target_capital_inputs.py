@@ -50,7 +50,7 @@ class TargetCapitalInputsSetter(ABC):
         initial_production: np.ndarray,
         previous_good_prices: np.ndarray,
         substitution_bundle_matrix: np.ndarray,
-        extra_taxes: Optional[np.ndarray] = None,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Calculate unconstrained target capital inputs for each firm.
 
@@ -74,8 +74,7 @@ class TargetCapitalInputsSetter(ABC):
             previous_good_prices (np.ndarray): Previous period's input prices
             substitution_bundle_matrix (np.ndarray): Matrix defining substitution
                 bundles for inputs (not used in Leontief technology)
-            extra_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
-                that may affect input decisions. Defaults to None.
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
 
         Returns:
             np.ndarray: Unconstrained target capital inputs by firm and type
@@ -136,7 +135,7 @@ class FinancialTargetCapitalInputsSetter(TargetCapitalInputsSetter):
         initial_production: np.ndarray,
         previous_good_prices: np.ndarray,
         substitution_bundle_matrix: np.ndarray,
-        extra_taxes: Optional[np.ndarray] = None,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Calculate unconstrained capital input targets with stock adjustment.
 
@@ -155,8 +154,7 @@ class FinancialTargetCapitalInputsSetter(TargetCapitalInputsSetter):
             previous_good_prices (np.ndarray): Previous period's input prices
             substitution_bundle_matrix (np.ndarray): Matrix defining substitution
                 bundles for inputs (not used in Leontief technology)
-            extra_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
-                that may affect input decisions. Defaults to None.
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
 
         Returns:
             np.ndarray: Unconstrained target capital inputs by firm and type
@@ -197,6 +195,7 @@ class FinancialTargetCapitalInputsSetter(TargetCapitalInputsSetter):
         received_long_term_credit: np.ndarray,
         previous_good_prices: np.ndarray,
         expected_inflation: float,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Calculate financially constrained capital input targets.
 
@@ -212,17 +211,21 @@ class FinancialTargetCapitalInputsSetter(TargetCapitalInputsSetter):
             received_long_term_credit (np.ndarray): Actually received credit
             previous_good_prices (np.ndarray): Previous period's prices
             expected_inflation (float): Expected inflation rate
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
 
         Returns:
             np.ndarray: Financially constrained target capital inputs,
                 adjusted for credit availability and price expectations
         """
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(previous_good_prices)
+
         return np.maximum(
             0.0,
             unconstrained_target_capital_inputs
             - self.credit_gap_fraction
             * (target_long_term_credit - received_long_term_credit)[:, None]
-            / ((1 + expected_inflation) * previous_good_prices),
+            / ((1 + expected_inflation) * (previous_good_prices + additional_goods_taxes)),
         )
 
 
@@ -268,7 +271,7 @@ class BundleWeightedTargetCapitalInputsSetter(FinancialTargetCapitalInputsSetter
         initial_production: np.ndarray,
         previous_good_prices: np.ndarray,
         substitution_bundle_matrix: np.ndarray,
-        extra_taxes: Optional[np.ndarray] = None,
+        additional_goods_taxes: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Calculate bundle-weighted unconstrained capital input targets.
 
@@ -287,15 +290,14 @@ class BundleWeightedTargetCapitalInputsSetter(FinancialTargetCapitalInputsSetter
             previous_good_prices (np.ndarray): Previous period's input prices
             substitution_bundle_matrix (np.ndarray): Matrix defining substitution
                 bundles for inputs
-            extra_taxes (Optional[np.ndarray], optional): Additional taxes on inputs
-                that may affect input decisions. Defaults to None.
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
 
         Returns:
             np.ndarray: Bundle-weighted unconstrained target capital inputs
         """
 
-        if extra_taxes is None:
-            extra_taxes = np.zeros_like(previous_good_prices)
+        if additional_goods_taxes is None:
+            additional_goods_taxes = np.zeros_like(previous_good_prices)
 
         # Get base unconstrained targets from parent class
         base_targets = super().compute_unconstrained_target_capital_inputs(
@@ -307,7 +309,7 @@ class BundleWeightedTargetCapitalInputsSetter(FinancialTargetCapitalInputsSetter
             initial_production,
             previous_good_prices,
             substitution_bundle_matrix,
-            extra_taxes,
+            additional_goods_taxes,
         )
 
         # Calculate average price (using nanmean to handle potential NaN values)
@@ -315,7 +317,7 @@ class BundleWeightedTargetCapitalInputsSetter(FinancialTargetCapitalInputsSetter
 
         # Calculate unnormalized weights
         # exp(-beta / avg_price * price[j] / depreciation_matrix[i,j])
-        unnormalized_weights = np.exp(-self.beta / avg_price * (previous_good_prices + extra_taxes))
+        unnormalized_weights = np.exp(-self.beta / avg_price * (previous_good_prices + additional_goods_taxes))
         unnormalized_weights = np.outer(np.ones_like(unnormalized_weights), unnormalized_weights)
 
         # Create bundle matrix C = M*M.transpose() and replace non-zero coefficients with 1

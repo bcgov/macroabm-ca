@@ -126,9 +126,9 @@ class Country:
     assume_zero_growth: bool
     assume_zero_noise: bool
     configuration: CountryConfiguration
-    personal_income_tax: Optional[PersonalIncomeTax] = None
-    consumer_tax: Optional[ConsumerTax] = None
-    donation_augmentation: Optional[StateAugmentation] = None
+    # personal_income_tax: Optional[PersonalIncomeTax] = None
+    # consumer_tax: Optional[ConsumerTax] = None
+    # donation_augmentation: Optional[StateAugmentation] = None
 
     def __init__(
         self,
@@ -158,6 +158,7 @@ class Country:
         emitting_indices_ch4: Optional[np.ndarray] = None,
         personal_income_tax: Optional[PersonalIncomeTax] = None,
         consumer_tax: Optional[ConsumerTax] = None,
+        additional_goods_taxes: Optional[np.ndarray] = None,
         donation_augmentation: Optional[StateAugmentation] = None,
     ):
         """Initialize a new country economy.
@@ -187,6 +188,7 @@ class Country:
             emitting_indices (Optional[np.ndarray]): Industry indices that emit
             personal_income_tax (Optional[PersonalIncomeTax]): Peronal income tax policy
             consumer_tax (Optional[ConsumerTax]): Consumer tax policy
+            additional_goods_taxes (Optional[np.ndarray]): Taxes on goods from policies
             donation_augmentation (Optional[StateAugmentation]): Donation state augmentation
         """
         # Parameters
@@ -236,6 +238,7 @@ class Country:
         self.policy_type = self.configuration.policy_type
         self.personal_income_tax = personal_income_tax
         self.consumer_tax = consumer_tax
+        self.additional_goods_taxes = additional_goods_taxes
 
         # Fin data
         self.donation_augmentation = donation_augmentation
@@ -399,13 +402,13 @@ class Country:
         else:
             personal_income_tax = None
 
-        # Consumer Tax
+        # Household consumption tax
         if country_configuration.use_taxation_policies and synthetic_country.consumer_tax_rates is not None:
             # Import PST rate timeseries 
             # TODO: Properly calculate effective PST rates for each industry (see https://fincsp.atlassian.net/browse/FREDA-455)
             consumer_tax_all = synthetic_country.consumer_tax_rates.data
             consumer_tax_country = consumer_tax_all[(consumer_tax_all['jurisdiction'] == 'CAN_BC')]          # NOTE: Temporarily assume all provinces follow BC rates     
-            # consumer_tax_country = consumer_tax_all[(consumer_tax_all['jurisdiction'] == country_name)]    # TODO: Use this version once rates for all provinces are available
+            # consumer_tax_country = consumer_tax_all[(consumer_tax_all['jurisdiction'] == country_name)]    # TODO: Use once rates for all provinces are in consumer_tax-rates.csv 
             consumer_tax_country_year = consumer_tax_country.loc[[initial_year]] # pass index as list ensures dataframe (not a series) returned 
 
             rates = consumer_tax_country_year["rate"].values
@@ -418,6 +421,16 @@ class Country:
             consumer_tax.rates_timeseries = consumer_tax_country # store complete timeseries for this country           
         else:
             consumer_tax = None
+
+        # Firm consumption tax
+        if (
+            country_configuration.use_taxation_policies 
+            and synthetic_country.consumer_tax_rates is not None 
+            and country_configuration.use_firm_consumer_tax
+        ):
+            additional_goods_taxes = rates  # NOTE: Assumes that households and firms are subject to the same rates
+        else:
+            additional_goods_taxes = np.zeros(len(industries))
         
         initial_consumption_by_industry = synthetic_country.industry_data["industry_vectors"][
             "Household Consumption in LCU"
@@ -570,6 +583,7 @@ class Country:
             emitting_indices_ch4=emitting_indices_ch4,
             personal_income_tax=personal_income_tax,
             consumer_tax=consumer_tax,
+            additional_goods_taxes=additional_goods_taxes,
             donation_augmentation=donation_augmentation,
         )
 
@@ -638,6 +652,7 @@ class Country:
         self.firms.set_estimates(
             previous_average_good_prices=self.economy.ts.current("good_prices"),
             current_estimated_growth=self.economy.ts.current("estimated_growth")[0],
+            additional_goods_taxes=self.additional_goods_taxes,
         )
 
     def target_setting_phase(self) -> None:
@@ -825,28 +840,33 @@ class Country:
                     current_estimated_ppi_inflation=self.economy.ts.current("estimated_ppi_inflation")[0],
                     previous_average_good_prices=self.economy.ts.current("good_prices"),
                     ppi_during=self.exogenous.national_accounts_during["PPI (Value)"].values.flatten(),
+                    additional_goods_taxes=self.additional_goods_taxes,
                 )
             )
 
         # Firm demand for goods
         self.firms.ts.unconstrained_target_intermediate_inputs.append(
             self.firms.compute_unconstrained_demand_for_intermediate_inputs(
-                good_prices=self.economy.ts.current("good_prices")
+                good_prices=self.economy.ts.current("good_prices"),
+                additional_goods_taxes=self.additional_goods_taxes,
             )
         )
         self.firms.ts.unconstrained_target_intermediate_inputs_costs.append(
             self.firms.compute_unconstrained_demand_for_intermediate_inputs_value(
                 current_good_prices=self.economy.ts.current("good_prices"),
+                additional_goods_taxes=self.additional_goods_taxes,
             )
         )
         self.firms.ts.unconstrained_target_capital_inputs.append(
             self.firms.compute_unconstrained_demand_for_capital_inputs(
-                good_prices=self.economy.ts.current("good_prices")
+                good_prices=self.economy.ts.current("good_prices"),
+                additional_goods_taxes=self.additional_goods_taxes,
             )
         )
         self.firms.ts.unconstrained_target_capital_inputs_costs.append(
             self.firms.compute_unconstrained_demand_for_capital_inputs_value(
                 current_good_prices=self.economy.ts.current("good_prices"),
+                additional_goods_taxes=self.additional_goods_taxes,
             )
         )
 
@@ -937,8 +957,8 @@ class Country:
                 )
                 b = np.sum(self.individuals.ts.current("personal_income_tax_owed"))
                 print(f"\t{self.country_name}:")
-                print(f"\t\ttotal_personal_income_tax_paid: ${a:,.2f}")
-                print(f"\t\ttotal_personal_income_tax_owed: ${b:,.2f}")
+                print(f"\t\ttotal(personal_income_tax_paid + personal_income_tax_adjustment): ${a:,.2f}")
+                print(f"\t\ttotal(personal_income_tax_owed): ${b:,.2f}")
                 percent_difference = (np.abs(a - b) / ((a + b) / 2) * 100)
                 print(f"\t\tpercent_difference: {percent_difference:.2f}%")
         else:
@@ -987,7 +1007,7 @@ class Country:
                 per_capita_unemployment_benefits=self.central_government.ts.current(
                     "unemployment_benefits_by_individual"
                 )[0],
-                tau_vat=self.consumer_tax.rates,    #self.central_government.states["Value-added Tax"],
+                tau_vat=self.consumer_tax.get_rates(),    #self.central_government.states["Value-added Tax"],
                 assume_zero_growth=self.assume_zero_growth,
                 prices=self.firms.ts.current("price"),
                 initial_prices=self.firms.ts.initial("price"),
@@ -1056,6 +1076,7 @@ class Country:
         self.firms.compute_target_credit(
             estimated_growth=self.economy.ts.current("estimated_growth")[0],
             estimated_inflation=self.economy.ts.current("estimated_ppi_inflation")[0],
+            additional_goods_taxes=self.additional_goods_taxes,
         )
         self.households.compute_target_credit(
             current_sales=self.housing_market.states["current_sales"].loc[
@@ -1177,6 +1198,7 @@ class Country:
             exchange_rate_usd_to_lcu=self.exchange_rate_usd_to_lcu,
             previous_good_prices=self.economy.ts.current("good_prices"),
             expected_inflation=self.economy.ts.current("estimated_ppi_inflation")[0],
+            additional_goods_taxes=self.additional_goods_taxes,
         )
         self.households.prepare_goods_market_clearing(
             exchange_rate_usd_to_lcu=self.exchange_rate_usd_to_lcu,
@@ -1422,11 +1444,18 @@ class Country:
 
         # D1. FIRM FINANCIAL METRICS
         # Update firm financial positions
-        self.firms.ts.total_inventory_change.append(self.firms.compute_total_inventory_change())
+        self.firms.ts.total_inventory_change.append(
+            self.firms.compute_total_inventory_change(additional_goods_taxes=self.additional_goods_taxes)
+            )
         self.firms.ts.total_sales.append(self.firms.compute_total_sales())
         self.firms.ts.taxes_paid_on_production.append(
             self.firms.compute_taxes_paid_on_production(
                 taxes_less_subsidies_rates=self.central_government.states["Taxes Less Subsidies Rates"],
+            )
+        )
+        self.firms.ts.consumer_tax_paid.append(
+            self.firms.compute_consumer_taxes_paid(
+                additional_goods_taxes = self.additional_goods_taxes,
             )
         )
         self.firms.ts.profits.append(self.firms.compute_profits())
@@ -1533,7 +1562,7 @@ class Country:
             readjusted_factors_ch4 = None
 
         self.households.update_consumption_and_investment(
-            tau_vat=self.consumer_tax.rates,    #self.central_government.states["Value-added Tax"],
+            tau_vat=self.consumer_tax.get_rates(),    #self.central_government.states["Value-added Tax"],
             tau_cf=self.central_government.states["Capital Formation Tax"],
             readjusted_factors=readjusted_factors,
             emitting_indices=self.emitting_indices,
@@ -1545,6 +1574,7 @@ class Country:
         self.households.update_wealth(
             housing_data=self.housing_market.states["properties"],
             tau_cf=self.central_government.states["Capital Formation Tax"],
+            tau_vat=self.consumer_tax.get_rates(),
         )
         self.households.ts.wealth_histogram.append(get_histogram(self.households.ts.current("wealth"), self.scale))
         self.households.ts.net_wealth.append(self.households.compute_net_wealth())
@@ -1644,11 +1674,12 @@ class Country:
                 self.individuals.ts.current("personal_income_tax_paid")
                 + self.individuals.ts.current("personal_income_tax_adjustment")
             ),
+            firm_consumer_tax_paid=self.firms.ts.current("consumer_tax_paid"),
             consumer_tax=self.consumer_tax,
         )
 
         # General government fields
-        self.central_government.ts.taxes_on_products.append([self.central_government.compute_taxes_on_products(self.consumer_tax)])
+        self.central_government.ts.taxes_on_products.append([self.central_government.compute_taxes_on_products()])
         self.central_government.ts.revenue.append(
             [
                 self.central_government.compute_revenue(
@@ -1801,6 +1832,8 @@ class Country:
 
         rates = rates_timeseries_year["rate"].values
         self.consumer_tax.set_rates(rates)
+        if self.configuration.use_firm_consumer_tax:
+            self.additional_goods_taxes = rates
     
     def update_states_from_data(self, year:int) -> None:
         """Update individual states that rely on FIN data to the current timestep (even though the data is yearly)

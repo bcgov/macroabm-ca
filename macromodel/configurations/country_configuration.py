@@ -45,6 +45,8 @@ class CountryConfiguration(BaseModel):
 
     # Taxation
     use_taxation_policies: bool = False                         # Off by default
+    use_firm_consumer_tax: bool = False                         # Set to False for basic PST (only applies to only household consumption)
+                                                                # or True for VAT (which applied to household and firm consumption)
     policy_type: int = 0                                        # Flag for policy type: 0 = Flat, 1 = Progressive, 2=TBD
     simple_bracket: Optional[list[tuple[float, float]]] = None  # If set to None then country.from_pickled_country() 
                                                                 #       will use brackets from PersonalIncomeTaxReader
